@@ -48,6 +48,8 @@ RUN npm install -g scanservjs
 
 COPY rootfs /
 
+RUN ls -la /run.sh && chmod +x /run.sh
+
 # Add user and disable sudo password checking
 RUN useradd \
   --groups=sudo,lp,lpadmin \
