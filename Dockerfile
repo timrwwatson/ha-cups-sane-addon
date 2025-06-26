@@ -1,4 +1,4 @@
-ARG BUILD_FROM
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
 LABEL io.hass.version="1.1.0" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
@@ -34,19 +34,24 @@ RUN apt-get update \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-# Install SANE packages separately
+# Install SANE packages separately with alternatives
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        sane \
+        libsane-common \
+        libsane-dev \
         sane-utils \
-        sane-backends \
-        libsane \
+        sane-airscan \
+        imagemagick \
+        ipp-usb \
+        tesseract-ocr \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-# Install scanservjs
-RUN npm install -g scanservjs
-
 COPY rootfs /
+
+# Install scanservjs
+RUN curl -s https://raw.githubusercontent.com/sbs20/scanservjs/master/bootstrap.sh | sudo bash -s -- -v latest
 
 RUN ls -la /run.sh && chmod +x /run.sh
 
