@@ -18,7 +18,7 @@ Also SANE support and scanservjs for scanning. The goal is to fully network enab
 
 # Acknowledgements
 
+Forked from: https://github.com/niallr/ha-cups-addon
 cupsd.conf and Dockerfile modified from https://github.com/lemariva/wifi-cups-server
 Some of the Avahi and D-Bus code is modified from https://github.com/marthoc/docker-homeseer
-
-https://github.com/sbs20/scanservjs/tree/master/docs
+Scan server provided by https://github.com/sbs20/scanservjs/tree/master/docs
