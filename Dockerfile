@@ -33,12 +33,11 @@ RUN apt-get update \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-# Install SANE packages separately
+# Install SANE packages with correct names
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         sane-utils \
-        sane-backends \
-        libsane1 \
+        libsane \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
