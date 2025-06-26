@@ -29,8 +29,16 @@ RUN apt-get update \
         bash-completion \
         procps \
         whois \
+        sane-utils \
+        sane-backends \
+        libsane \
+        nodejs \
+        npm \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
+
+    # Install scanservjs
+RUN npm install -g scanservjs
 
 COPY rootfs /
 

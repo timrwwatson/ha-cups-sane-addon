@@ -34,6 +34,15 @@ rm -v -fR /etc/cups
 ln -v -s /data/cups /etc/cups
 bashio::log.info "Init config and directories completed."
 
+# Initialize SANE and scanning directories
+bashio::log.info "Initializing SANE and scanning directories..."
+mkdir -p /data/scans
+chmod 755 /data/scans
+
+# Start scanservjs in background
+bashio::log.info "Starting scanservjs..."
+scanservjs --host 0.0.0.0 --port 8080 --output-dir /data/scans &
+
 bashio::log.info "Starting CUPS server as CMD from S6"
 
 cupsd -f
