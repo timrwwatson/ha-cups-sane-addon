@@ -5,7 +5,7 @@ LABEL io.hass.version="1.0" io.hass.type="addon" io.hass.arch="armhf|aarch64|i38
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# printer-driver-brlaser specifically called out for Brother printer support
+# Install base packages first (your existing ones)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         sudo \
@@ -29,15 +29,26 @@ RUN apt-get update \
         bash-completion \
         procps \
         whois \
-        sane-utils \
-        sane-backends \
-        libsane \
-        nodejs \
-        npm \
+        curl \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-    # Install scanservjs
+# Install SANE packages separately
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        sane-utils \
+        sane-backends \
+        libsane1 \
+    && apt-get clean -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js from NodeSource
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install scanservjs
 RUN npm install -g scanservjs
 
 COPY rootfs /
