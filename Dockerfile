@@ -66,6 +66,7 @@ RUN useradd \
 && sed -i '/%sudo[[:space:]]/ s/ALL[[:space:]]*$/NOPASSWD:ALL/' /etc/sudoers
 
 EXPOSE 631
+EXPOSE 8080
 RUN chmod a+x /run.sh
 
 CMD ["/run.sh"]
