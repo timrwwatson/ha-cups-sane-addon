@@ -45,13 +45,14 @@ RUN apt-get update \
         imagemagick \
         ipp-usb \
         tesseract-ocr \
+        gnupg \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY rootfs /
 
 # Install scanservjs
-RUN curl -s https://raw.githubusercontent.com/sbs20/scanservjs/master/bootstrap.sh | sudo bash -s -- -v latest
+RUN curl -s https://raw.githubusercontent.com/sbs20/scanservjs/master/bootstrap.sh | bash -s -- -v latest
 
 RUN ls -la /run.sh && chmod +x /run.sh
 
@@ -65,8 +66,7 @@ RUN useradd \
   print \
 && sed -i '/%sudo[[:space:]]/ s/ALL[[:space:]]*$/NOPASSWD:ALL/' /etc/sudoers
 
-EXPOSE 631
-EXPOSE 8080
+EXPOSE 631 8080
 RUN chmod a+x /run.sh
 
 CMD ["/run.sh"]

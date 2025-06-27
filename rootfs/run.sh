@@ -39,6 +39,9 @@ bashio::log.info "Initializing SANE and scanning directories..."
 mkdir -p /data/scans
 chmod 755 /data/scans
 
+
+which scanservjs || bashio::log.error "scanservjs not found in PATH"
+
 # Start scanservjs in background
 bashio::log.info "Starting scanservjs..."
 scanservjs --host 0.0.0.0 --port 8080 --output-dir /data/scans &
