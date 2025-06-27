@@ -1,0 +1,161 @@
+module.exports = {
+  // Server configuration
+  host: '0.0.0.0',
+  port: 8080,
+  
+  // Directory paths
+  outputDirectory: '/data/scans',
+  previewDirectory: '/tmp/scanservjs',
+  
+  // Default scan settings
+  scanImage: {
+    params: {
+      deviceId: '',
+      top: 0,
+      left: 0,
+      width: 215,
+      height: 297,
+      resolution: 150,
+      mode: 'Color',
+      source: 'Flatbed',
+      brightness: 0,
+      contrast: 0
+    }
+  },
+
+  // Supported file formats with OCR support
+  outputFormats: [
+    {
+      key: 'tif',
+      extension: 'tif',
+      description: 'TIF (Uncompressed)',
+      params: []
+    },
+    {
+      key: 'jpg',
+      extension: 'jpg', 
+      description: 'JPG (Compressed)',
+      params: [
+        {
+          key: 'quality',
+          type: 'number',
+          min: 1,
+          max: 100,
+          default: 92,
+          text: 'Quality'
+        }
+      ]
+    },
+    {
+      key: 'png',
+      extension: 'png',
+      description: 'PNG (Lossless)', 
+      params: []
+    },
+    {
+      key: 'pdf',
+      extension: 'pdf',
+      description: 'PDF Document',
+      params: []
+    },
+    {
+      key: 'txt',
+      extension: 'txt',
+      description: 'Text (OCR)',
+      params: [
+        {
+          key: 'language',
+          type: 'select',
+          options: ['eng', 'deu', 'fra', 'spa', 'ita', 'por', 'nld'],
+          default: 'eng',
+          text: 'Language'
+        }
+      ]
+    }
+  ],
+
+  // Batch scanning options
+  batchOptions: [
+    {
+      key: 'none',
+      description: 'Single page'
+    },
+    {
+      key: 'auto',
+      description: 'Auto (ADF)'
+    },
+    {
+      key: 'manual',
+      description: 'Manual (prompt for each page)'
+    }
+  ],
+
+  // Filter options
+  filters: [
+    {
+      key: 'auto-level',
+      description: 'Auto Level',
+      default: false
+    },
+    {
+      key: 'threshold',
+      description: 'Threshold',
+      default: false,
+      params: [
+        {
+          key: 'threshold',
+          type: 'number',
+          min: 0,
+          max: 100,
+          default: 50,
+          text: 'Threshold'
+        }
+      ]
+    },
+    {
+      key: 'blur',
+      description: 'Blur',
+      default: false,
+      params: [
+        {
+          key: 'sigma',
+          type: 'number',
+          min: 0.1,
+          max: 5.0,
+          step: 0.1,
+          default: 1.0,
+          text: 'Sigma'
+        }
+      ]
+    }
+  ],
+
+  // Logging configuration
+  log: {
+    level: 'INFO'
+  },
+
+  // OCR settings
+  ocr: {
+    enabled: true,
+    lang: 'eng',
+    languages: [
+      { key: 'eng', name: 'English' },
+      { key: 'deu', name: 'German' },
+      { key: 'fra', name: 'French' },
+      { key: 'spa', name: 'Spanish' },
+      { key: 'ita', name: 'Italian' },
+      { key: 'por', name: 'Portuguese' },
+      { key: 'nld', name: 'Dutch' }
+    ]
+  },
+
+  // Device overrides - will be populated automatically
+  devices: [],
+  
+  // UI Settings
+  ui: {
+    theme: 'auto',
+    locale: 'en'
+  }
+}; 

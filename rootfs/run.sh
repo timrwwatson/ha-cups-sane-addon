@@ -21,6 +21,10 @@ echo "$config" | tempio \
 echo "$config" | tempio \
     -template /usr/share/avahi-daemon.conf.tempio \
     -out /etc/avahi/avahi-daemon.conf
+
+echo "$config" | tempio \
+    -template /usr/share/sane.conf.tempio \
+    -out /etc/sane.d/saned.conf
     
 # Start Avahi, wait for it to start up
 touch /var/run/avahi_configured
@@ -39,13 +43,22 @@ bashio::log.info "Initializing SANE and scanning directories..."
 mkdir -p /data/scans
 chmod 755 /data/scans
 
+# Initialize SANE configuration
+bashio::log.info "Configuring SANE scanner support..."
+mkdir -p /data/sane.d
+cp -R /etc/sane.d/* /data/sane.d/ 2>/dev/null || true
+rm -rf /etc/sane.d
+ln -s /data/sane.d /etc/sane.d
 
-which scanservjs || bashio::log.error "scanservjs not found in PATH"
+# Ensure scanner access permissions
+usermod -a -G scanner,lp root 2>/dev/null || true
 
-# Start scanservjs in background
-bashio::log.info "Starting scanservjs..."
-scanservjs --host 0.0.0.0 --port 8080 --output-dir /data/scans &
+# Generate scanservjs configuration
+echo "$config" | tempio \
+    -template /usr/share/scanservjs.config.js.tempio \
+    -out /data/scanservjs.config.js
 
-bashio::log.info "Starting CUPS server as CMD from S6"
+bashio::log.info "Configuration complete, starting S6 services..."
 
-cupsd -f
+# Let S6 handle all service management
+exec /init

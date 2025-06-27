@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
-LABEL io.hass.version="1.1.1" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
+LABEL io.hass.version="1.1.2" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -31,6 +31,7 @@ RUN apt-get update \
         whois \
         nodejs \
         npm \
+        netcat-openbsd \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
@@ -51,10 +52,19 @@ RUN apt-get update \
 
 COPY rootfs /
 
-# Install scanservjs
-RUN curl -s https://raw.githubusercontent.com/sbs20/scanservjs/master/bootstrap.sh | bash -s -- -v latest
+# Install scanservjs with better error handling and specific version
+RUN set -e && \
+    SCANSERVJS_VERSION="latest" && \
+    echo "Installing scanservjs version: ${SCANSERVJS_VERSION}" && \
+    curl -fsSL https://raw.githubusercontent.com/sbs20/scanservjs/master/bootstrap.sh -o /tmp/bootstrap.sh && \
+    chmod +x /tmp/bootstrap.sh && \
+    /tmp/bootstrap.sh -v ${SCANSERVJS_VERSION} && \
+    rm -f /tmp/bootstrap.sh && \
+    # Verify installation by checking for installed files instead of running command
+    (test -f /usr/bin/scanservjs || test -f /usr/local/bin/scanservjs || \
+     test -f /opt/scanservjs/bin/scanservjs || dpkg -l | grep -q scanservjs) && \
+    echo "scanservjs installation verified"
 
-RUN ls -la /run.sh && chmod +x /run.sh
 
 # Add user and disable sudo password checking
 RUN useradd \

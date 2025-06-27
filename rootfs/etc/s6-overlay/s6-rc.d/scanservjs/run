@@ -1,0 +1,44 @@
+#!/usr/bin/with-contenv bashio
+
+ulimit -n 1048576
+
+bashio::log.info "Starting scanservjs service..."
+
+# Wait for CUPS to be ready
+until nc -z localhost 631; do
+  bashio::log.info "Waiting for CUPS server to be ready..."
+  sleep 2
+done
+
+# Ensure scan directories exist
+mkdir -p /data/scans
+chmod 755 /data/scans
+
+# Check if scanservjs is installed
+if ! command -v scanservjs &> /dev/null; then
+    bashio::log.error "scanservjs command not found. Installation may have failed."
+    exit 1
+fi
+
+bashio::log.info "scanservjs found, starting server..."
+
+# Set environment variables for scanservjs
+export SCANSERVJS_CONFIG_PATH="/data/scanservjs.config.js"
+export SCANSERVJS_OUTPUT_DIR="/data/scans"
+export SCANSERVJS_PREVIEW_DIR="/tmp/scanservjs"
+
+# Ensure preview directory exists
+mkdir -p /tmp/scanservjs
+chmod 755 /tmp/scanservjs
+
+# Test SANE availability
+bashio::log.info "Testing SANE scanner detection..."
+scanimage -L || bashio::log.warning "No scanners detected - this is normal if no scanner is connected"
+
+# Start scanservjs with proper configuration
+bashio::log.info "Starting scanservjs web server on port 8080..."
+exec scanservjs \
+  --host 0.0.0.0 \
+  --port 8080 \
+  --output-dir /data/scans \
+  --config /data/scanservjs.config.js 
