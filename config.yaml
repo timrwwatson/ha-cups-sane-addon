@@ -1,8 +1,8 @@
 name: CUPS Print Server
-version: "1.1.1"
+version: "1.1.2"
 slug: cups
 description: The CUPS (Common UNIX Printing System) print server package with drivers included and Avahi and SANE scanner support.
-url: https://github.com/deronrspencer/ha-cups-sane-addon
+url: https://github.com/vtechs-ja/ha-cups-sane-addon
 arch:
   - aarch64
   - armhf
