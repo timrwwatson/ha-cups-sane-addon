@@ -14,8 +14,19 @@ done
 mkdir -p /data/scans
 chmod 755 /data/scans
 
-# Check if scanservjs is installed with detailed debugging
+# Check if scanservjs is installed with detailed debugging  
 bashio::log.info "Checking for scanservjs installation..."
+
+# Read installation debug log if available
+if [ -f /install-debug.log ]; then
+    bashio::log.info "=== Installation Debug Info ==="
+    while IFS= read -r line; do
+        bashio::log.info "$line"
+    done < /install-debug.log
+    bashio::log.info "=== End Installation Debug ==="
+else
+    bashio::log.warning "No installation debug log found at /install-debug.log"
+fi
 
 # First, try to find scanservjs binary
 SCANSERVJS_BIN=""
