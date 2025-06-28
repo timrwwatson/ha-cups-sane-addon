@@ -14,13 +14,54 @@ done
 mkdir -p /data/scans
 chmod 755 /data/scans
 
-# Check if scanservjs is installed
-if ! command -v scanservjs &> /dev/null; then
-    bashio::log.error "scanservjs command not found. Installation may have failed."
+# Check if scanservjs is installed with detailed debugging
+bashio::log.info "Checking for scanservjs installation..."
+
+# First, try to find scanservjs binary
+SCANSERVJS_BIN=""
+for path in /usr/bin/scanservjs /usr/local/bin/scanservjs /opt/scanservjs/bin/scanservjs; do
+    if [ -f "$path" ] && [ -x "$path" ]; then
+        SCANSERVJS_BIN="$path"
+        bashio::log.info "✓ Found executable scanservjs at: $path"
+        break
+    fi
+done
+
+# If not found in standard locations, search more broadly
+if [ -z "$SCANSERVJS_BIN" ]; then
+    bashio::log.warning "scanservjs not found in standard locations, searching..."
+    SCANSERVJS_BIN=$(find /usr /opt -name "scanservjs" -type f -executable 2>/dev/null | head -1)
+    if [ -n "$SCANSERVJS_BIN" ]; then
+        bashio::log.info "✓ Found scanservjs at: $SCANSERVJS_BIN"
+    fi
+fi
+
+# Final fallback - check if it's in PATH
+if [ -z "$SCANSERVJS_BIN" ] && command -v scanservjs &> /dev/null; then
+    SCANSERVJS_BIN=$(which scanservjs)
+    bashio::log.info "✓ Found scanservjs in PATH: $SCANSERVJS_BIN"
+fi
+
+# If still not found, provide detailed diagnostics
+if [ -z "$SCANSERVJS_BIN" ]; then
+    bashio::log.error "scanservjs binary not found!"
+    bashio::log.info "Diagnostic information:"
+    bashio::log.info "Available scan* binaries:"
+    find /usr /opt -name "scan*" -type f 2>/dev/null | head -10 || echo "None found"
+    bashio::log.info "Checking dpkg for scanservjs package:"
+    dpkg -l | grep scanservjs || echo "Package not found"
+    bashio::log.info "Contents of /usr/bin:"
+    ls -la /usr/bin/scan* 2>/dev/null || echo "No scan* binaries in /usr/bin"
     exit 1
 fi
 
-bashio::log.info "scanservjs found, starting server..."
+# Test scanservjs execution
+bashio::log.info "Testing scanservjs execution..."
+if ! "$SCANSERVJS_BIN" --version &>/dev/null; then
+    bashio::log.warning "scanservjs --version failed, but continuing anyway..."
+fi
+
+bashio::log.info "scanservjs binary verified at: $SCANSERVJS_BIN"
 
 # Set environment variables for scanservjs
 export SCANSERVJS_CONFIG_PATH="/data/scanservjs.config.js"
@@ -33,11 +74,11 @@ chmod 755 /tmp/scanservjs
 
 # Test SANE availability
 bashio::log.info "Testing SANE scanner detection..."
-scanimage -L || bashio::log.warning "No scanners detected - this is normal if no scanner is connected"
+scanimage -L 2>&1 | head -3 || bashio::log.warning "No scanners detected - this is normal if no scanner is connected"
 
 # Start scanservjs with proper configuration
 bashio::log.info "Starting scanservjs web server on port 8080..."
-exec scanservjs \
+exec "$SCANSERVJS_BIN" \
   --host 0.0.0.0 \
   --port 8080 \
   --output-dir /data/scans \

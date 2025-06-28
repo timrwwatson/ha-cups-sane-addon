@@ -58,7 +58,40 @@ echo "$config" | tempio \
     -template /usr/share/scanservjs.config.js.tempio \
     -out /data/scanservjs.config.js
 
-bashio::log.info "Configuration complete, starting S6 services..."
+bashio::log.info "Configuration complete, checking scanservjs availability..."
 
-# Let S6 handle all service management
-exec /init
+# Debug scanservjs installation before starting S6
+if command -v scanservjs &> /dev/null; then
+    bashio::log.info "✓ scanservjs found at: $(which scanservjs)"
+else
+    bashio::log.warning "scanservjs not found in PATH during setup"
+    # List possible locations
+    find /usr /opt -name "*scanservjs*" -type f 2>/dev/null | head -5 | while read file; do
+        bashio::log.info "Found scanservjs file: $file"
+    done
+fi
+
+bashio::log.info "Starting S6 services..."
+
+# Debug process information before starting S6
+bashio::log.info "Current PID: $$"
+bashio::log.info "Running as: $(whoami)"
+ps aux | head -5 | while read line; do
+    bashio::log.info "Process: $line"
+done
+
+# Check if we're running as PID 1
+if [ "$$" = "1" ]; then
+    bashio::log.info "Running as PID 1, executing S6 init directly"
+    exec /init
+else
+    bashio::log.warning "Not running as PID 1 (current PID: $$), starting S6 in alternative mode"
+    # Try starting S6 services directly instead of exec /init
+    /init &
+    S6_PID=$!
+    bashio::log.info "Started S6 with PID: $S6_PID"
+    
+    # Wait for S6 to complete or handle signals
+    trap 'kill $S6_PID; exit' TERM INT
+    wait $S6_PID
+fi
