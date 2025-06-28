@@ -169,6 +169,14 @@ This addon builds upon excellent work from the open-source community:
 - **Scanning Interface**: [sbs20/scanservjs](https://github.com/sbs20/scanservjs) - Modern web-based scanning solution
 - **SANE Project**: [sane-project.org](http://www.sane-project.org/) - Scanner Access Now Easy framework
 
+## ☕ **Support the Project**
+
+If this addon has been helpful and you'd like to support future development:
+
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-PayPal-blue.svg?style=for-the-badge&logo=paypal)](https://paypal.me/vtechjm)
+
+Your support helps keep this project maintained and updated! 🙏
+
 ## 📄 **License**
 
 This project is released under the same license terms as the original components it builds upon. See individual component repositories for specific licensing details.
