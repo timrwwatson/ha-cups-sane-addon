@@ -80,18 +80,73 @@ ps aux | head -5 | while read line; do
     bashio::log.info "Process: $line"
 done
 
-# Check if we're running as PID 1
-if [ "$$" = "1" ]; then
-    bashio::log.info "Running as PID 1, executing S6 init directly"
-    exec /init
+# Check installation debug log before starting services
+if [ -f /install-debug.log ]; then
+    bashio::log.info "=== Installation Debug Info ==="
+    while IFS= read -r line; do
+        bashio::log.info "$line"
+    done < /install-debug.log
+    bashio::log.info "=== End Installation Debug ==="
 else
-    bashio::log.warning "Not running as PID 1 (current PID: $$), starting S6 in alternative mode"
-    # Try starting S6 services directly instead of exec /init
-    /init &
-    S6_PID=$!
-    bashio::log.info "Started S6 with PID: $S6_PID"
-    
-    # Wait for S6 to complete or handle signals
-    trap 'kill $S6_PID; exit' TERM INT
-    wait $S6_PID
+    bashio::log.error "No installation debug log found at /install-debug.log - build may have failed!"
 fi
+
+# For HA addons, we should start services manually rather than using S6 init
+bashio::log.info "Starting services manually for HA addon compatibility..."
+
+# Start DBUS
+bashio::log.info "Starting DBUS daemon..."
+mkdir -p /var/run/dbus
+dbus-daemon --system --nofork &
+DBUS_PID=$!
+
+# Wait for DBUS to be ready
+sleep 2
+
+# Start Avahi  
+bashio::log.info "Starting Avahi daemon..."
+avahi-daemon &
+AVAHI_PID=$!
+
+# Wait for Avahi to be ready
+sleep 2
+
+# Start CUPS
+bashio::log.info "Starting CUPS server..."
+cupsd &
+CUPS_PID=$!
+
+# Wait for CUPS to be ready
+until nc -z localhost 631; do
+  bashio::log.info "Waiting for CUPS server to be ready..."
+  sleep 2
+done
+bashio::log.info "CUPS server is ready"
+
+# Start scanservjs if available
+if command -v scanservjs &> /dev/null; then
+    bashio::log.info "Starting scanservjs..."
+    mkdir -p /data/scans /tmp/scanservjs
+    chmod 755 /data/scans /tmp/scanservjs
+    scanservjs --host 0.0.0.0 --port 8080 --output-dir /data/scans --config /data/scanservjs.config.js &
+    SCANSERVJS_PID=$!
+    bashio::log.info "scanservjs started with PID: $SCANSERVJS_PID"
+else
+    bashio::log.error "scanservjs not found - installation failed"
+fi
+
+# Wait for all services (trap signals to clean shutdown)
+trap 'kill $DBUS_PID $AVAHI_PID $CUPS_PID $SCANSERVJS_PID 2>/dev/null; exit' TERM INT
+
+bashio::log.info "All services started. Addon is running."
+
+# Keep the script running
+while true; do
+    sleep 30
+    # Basic health check
+    if ! pgrep cupsd > /dev/null; then
+        bashio::log.error "CUPS server died, restarting..."
+        cupsd &
+        CUPS_PID=$!
+    fi
+done
