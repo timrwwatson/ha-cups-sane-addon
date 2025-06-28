@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
-LABEL io.hass.version="1.1.9" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
+LABEL io.hass.version="1.2.0" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -94,31 +94,21 @@ RUN echo "" >> /install-debug.log && \
     find /usr /opt -name "*scanservjs*" -type f 2>/dev/null >> /install-debug.log || echo "No scanservjs files found" >> /install-debug.log && \
     \
     echo "" >> /install-debug.log && \
-    echo "3. Checking for executable:" >> /install-debug.log && \
-    if which scanservjs >> /install-debug.log 2>&1; then \
-        echo "✓ scanservjs found in PATH" >> /install-debug.log && \
-        ls -la $(which scanservjs) >> /install-debug.log 2>&1; \
+    echo "3. Checking systemd service file:" >> /install-debug.log && \
+    if [ -f /lib/systemd/system/scanservjs.service ]; then \
+        echo "✓ Found systemd service file:" >> /install-debug.log && \
+        cat /lib/systemd/system/scanservjs.service >> /install-debug.log; \
     else \
-        echo "✗ scanservjs not in PATH" >> /install-debug.log; \
+        echo "✗ No systemd service file found" >> /install-debug.log; \
     fi && \
     \
     echo "" >> /install-debug.log && \
-    echo "4. Checking specific paths:" >> /install-debug.log && \
-    for path in /usr/bin/scanservjs /usr/local/bin/scanservjs /opt/scanservjs/bin/scanservjs; do \
-        if [ -f "$path" ]; then \
-            echo "✓ Found: $path ($(ls -la $path))" >> /install-debug.log; \
-        else \
-            echo "✗ Not found: $path" >> /install-debug.log; \
-        fi; \
-    done && \
+    echo "4. Checking package contents:" >> /install-debug.log && \
+    dpkg -L scanservjs | head -20 >> /install-debug.log && \
     \
     echo "" >> /install-debug.log && \
-    echo "5. Testing execution:" >> /install-debug.log && \
-    if timeout 10 scanservjs --version >> /install-debug.log 2>&1; then \
-        echo "✓ scanservjs execution test passed" >> /install-debug.log; \
-    else \
-        echo "✗ scanservjs execution test failed" >> /install-debug.log; \
-    fi && \
+    echo "5. Looking for Node.js files:" >> /install-debug.log && \
+    find /usr/lib /usr/share /opt -name "*.js" -path "*scanservjs*" 2>/dev/null | head -10 >> /install-debug.log || echo "No Node.js files found" >> /install-debug.log && \
     \
     echo "" >> /install-debug.log && \
     echo "=== Debug Summary Complete ===" >> /install-debug.log
