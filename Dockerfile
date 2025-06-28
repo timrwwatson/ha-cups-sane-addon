@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
-LABEL io.hass.version="1.1.6" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
+LABEL io.hass.version="1.1.8" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -52,23 +52,76 @@ RUN apt-get update \
 
 COPY rootfs /
 
-# Install scanservjs with debug file logging
+# Install scanservjs with comprehensive debug logging
 RUN set -e && \
-    echo "Starting scanservjs installation" > /install-debug.log && \
-    curl -fsSL "https://github.com/sbs20/scanservjs/releases/download/v3.0.3/scanservjs_3.0.3-1_all.deb" -o /tmp/scanservjs.deb && \
-    echo "Downloaded .deb file: $(stat -c%s /tmp/scanservjs.deb) bytes" >> /install-debug.log && \
+    echo "=== Starting scanservjs installation ===" > /install-debug.log && \
+    echo "Date: $(date)" >> /install-debug.log && \
+    echo "Architecture: $(uname -m)" >> /install-debug.log && \
+    echo "OS: $(cat /etc/os-release | grep PRETTY_NAME)" >> /install-debug.log && \
+    echo "Available disk space: $(df -h / | tail -1)" >> /install-debug.log && \
+    echo "Memory: $(free -h | head -2 | tail -1)" >> /install-debug.log && \
+    echo "" >> /install-debug.log && \
+    \
+    echo "Downloading scanservjs .deb file..." >> /install-debug.log && \
+    if curl -fsSL "https://github.com/sbs20/scanservjs/releases/download/v3.0.3/scanservjs_3.0.3-1_all.deb" -o /tmp/scanservjs.deb; then \
+        echo "✓ Download successful" >> /install-debug.log && \
+        echo "File size: $(stat -c%s /tmp/scanservjs.deb) bytes" >> /install-debug.log && \
+        echo "File type: $(file /tmp/scanservjs.deb)" >> /install-debug.log; \
+    else \
+        echo "✗ Download failed" >> /install-debug.log && \
+        exit 1; \
+    fi && \
+    \
+    echo "" >> /install-debug.log && \
+    echo "Installing .deb package..." >> /install-debug.log && \
     dpkg -i /tmp/scanservjs.deb 2>&1 | tee -a /install-debug.log && \
-    echo "Package installation completed" >> /install-debug.log && \
+    echo "✓ dpkg installation completed" >> /install-debug.log && \
     rm -f /tmp/scanservjs.deb
 
-# Verify and log results to debug file
-RUN echo "=== Installation Verification ===" >> /install-debug.log && \
-    echo "Package in dpkg:" >> /install-debug.log && \
-    (dpkg -l | grep scanservjs >> /install-debug.log || echo "Package not found in dpkg" >> /install-debug.log) && \
-    echo "Searching for scanservjs files:" >> /install-debug.log && \
-    (find /usr -name "*scanservjs*" 2>/dev/null >> /install-debug.log || echo "No scanservjs files found" >> /install-debug.log) && \
-    echo "Checking executables:" >> /install-debug.log && \
-    (which scanservjs >> /install-debug.log 2>&1 || echo "scanservjs not in PATH" >> /install-debug.log)
+# Verify installation with detailed results
+RUN echo "" >> /install-debug.log && \
+    echo "=== Installation Verification ===" >> /install-debug.log && \
+    \
+    echo "1. Checking package in dpkg:" >> /install-debug.log && \
+    if dpkg -l | grep scanservjs >> /install-debug.log; then \
+        echo "✓ Package found in dpkg" >> /install-debug.log; \
+    else \
+        echo "✗ Package not found in dpkg" >> /install-debug.log; \
+    fi && \
+    \
+    echo "" >> /install-debug.log && \
+    echo "2. Searching for scanservjs files:" >> /install-debug.log && \
+    find /usr /opt -name "*scanservjs*" -type f 2>/dev/null >> /install-debug.log || echo "No scanservjs files found" >> /install-debug.log && \
+    \
+    echo "" >> /install-debug.log && \
+    echo "3. Checking for executable:" >> /install-debug.log && \
+    if which scanservjs >> /install-debug.log 2>&1; then \
+        echo "✓ scanservjs found in PATH" >> /install-debug.log && \
+        ls -la $(which scanservjs) >> /install-debug.log 2>&1; \
+    else \
+        echo "✗ scanservjs not in PATH" >> /install-debug.log; \
+    fi && \
+    \
+    echo "" >> /install-debug.log && \
+    echo "4. Checking specific paths:" >> /install-debug.log && \
+    for path in /usr/bin/scanservjs /usr/local/bin/scanservjs /opt/scanservjs/bin/scanservjs; do \
+        if [ -f "$path" ]; then \
+            echo "✓ Found: $path ($(ls -la $path))" >> /install-debug.log; \
+        else \
+            echo "✗ Not found: $path" >> /install-debug.log; \
+        fi; \
+    done && \
+    \
+    echo "" >> /install-debug.log && \
+    echo "5. Testing execution:" >> /install-debug.log && \
+    if timeout 10 scanservjs --version >> /install-debug.log 2>&1; then \
+        echo "✓ scanservjs execution test passed" >> /install-debug.log; \
+    else \
+        echo "✗ scanservjs execution test failed" >> /install-debug.log; \
+    fi && \
+    \
+    echo "" >> /install-debug.log && \
+    echo "=== Debug Summary Complete ===" >> /install-debug.log
 
 
 # Add user and disable sudo password checking
