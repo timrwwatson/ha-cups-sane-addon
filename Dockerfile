@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
-LABEL io.hass.version="1.1.4" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
+LABEL io.hass.version="1.1.5" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -52,37 +52,14 @@ RUN apt-get update \
 
 COPY rootfs /
 
-# Install scanservjs with pinned version and comprehensive verification
+# Install scanservjs - simplified for debugging
 RUN set -e && \
-    SCANSERVJS_VERSION="v3.0.3" && \
-    echo "Installing scanservjs version: ${SCANSERVJS_VERSION}" && \
-    curl -fsSL https://raw.githubusercontent.com/sbs20/scanservjs/master/bootstrap.sh -o /tmp/bootstrap.sh && \
-    chmod +x /tmp/bootstrap.sh && \
-    /tmp/bootstrap.sh -v ${SCANSERVJS_VERSION} && \
-    rm -f /tmp/bootstrap.sh
+    curl -fsSL "https://github.com/sbs20/scanservjs/releases/download/v3.0.3/scanservjs_3.0.3-1_all.deb" -o /tmp/scanservjs.deb && \
+    dpkg -i /tmp/scanservjs.deb && \
+    rm -f /tmp/scanservjs.deb
 
-# Verify installation step by step with detailed logging
-RUN echo "=== Starting scanservjs installation verification ===" && \
-    echo "Step 1: Checking /usr/bin/scanservjs..." && \
-    (test -f /usr/bin/scanservjs && echo "✓ Found in /usr/bin/scanservjs") || echo "✗ Not found in /usr/bin/scanservjs"
-
-RUN echo "Step 2: Checking /usr/local/bin/scanservjs..." && \
-    (test -f /usr/local/bin/scanservjs && echo "✓ Found in /usr/local/bin/scanservjs") || echo "✗ Not found in /usr/local/bin/scanservjs"
-
-RUN echo "Step 3: Checking /opt/scanservjs/bin/scanservjs..." && \
-    (test -f /opt/scanservjs/bin/scanservjs && echo "✓ Found in /opt/scanservjs/bin/scanservjs") || echo "✗ Not found in /opt/scanservjs/bin/scanservjs"
-
-RUN echo "Step 4: Checking package installation with dpkg..." && \
-    dpkg -l | grep scanservjs && echo "✓ Package found in dpkg" || echo "✗ Package not found in dpkg"
-
-RUN echo "Step 5: Listing all scanservjs files..." && \
-    find / -name "*scanservjs*" -type f 2>/dev/null | head -10 || echo "No scanservjs files found"
-
-RUN echo "Step 6: Final verification..." && \
-    (test -f /usr/bin/scanservjs || test -f /usr/local/bin/scanservjs || \
-     test -f /opt/scanservjs/bin/scanservjs || dpkg -l | grep -q scanservjs) && \
-    echo "✓ scanservjs installation verified successfully" || \
-    (echo "✗ scanservjs installation verification failed" && exit 1)
+# Simple verification - just check if the package installed
+RUN dpkg -l | grep scanservjs
 
 
 # Add user and disable sudo password checking
