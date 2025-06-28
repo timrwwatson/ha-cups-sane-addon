@@ -58,29 +58,7 @@ echo "$config" | tempio \
     -template /usr/share/scanservjs.config.js.tempio \
     -out /data/scanservjs.config.js
 
-bashio::log.info "Configuration complete, checking scanservjs availability..."
-
-# Debug scanservjs installation before starting S6
-if command -v scanservjs &> /dev/null; then
-    bashio::log.info "✓ scanservjs found at: $(which scanservjs)"
-else
-    bashio::log.warning "scanservjs not found in PATH during setup"
-    # List possible locations
-    find /usr /opt -name "*scanservjs*" -type f 2>/dev/null | head -5 | while read file; do
-        bashio::log.info "Found scanservjs file: $file"
-    done
-fi
-
-bashio::log.info "Starting S6 services..."
-
-# Debug process information before starting S6
-bashio::log.info "Current PID: $$"
-bashio::log.info "Running as: $(whoami)"
-ps aux | head -5 | while read line; do
-    bashio::log.info "Process: $line"
-done
-
-# Check installation debug log before starting services
+# Check installation debug log
 if [ -f /install-debug.log ]; then
     bashio::log.info "=== Installation Debug Info ==="
     while IFS= read -r line; do
@@ -91,7 +69,7 @@ else
     bashio::log.error "No installation debug log found at /install-debug.log - build may have failed!"
 fi
 
-# For HA addons, we should start services manually rather than using S6 init
+# For HA addons, we start services manually (not using S6 to avoid conflicts)
 bashio::log.info "Starting services manually for HA addon compatibility..."
 
 # Start DBUS
@@ -123,16 +101,41 @@ until nc -z localhost 631; do
 done
 bashio::log.info "CUPS server is ready"
 
-# Start scanservjs if available
-if command -v scanservjs &> /dev/null; then
-    bashio::log.info "Starting scanservjs..."
+# Start scanservjs using the correct Node.js command
+bashio::log.info "Starting scanservjs..."
+if [ -f /usr/lib/scanservjs/server/server.js ]; then
+    # Ensure directories exist
     mkdir -p /data/scans /tmp/scanservjs
     chmod 755 /data/scans /tmp/scanservjs
-    scanservjs --host 0.0.0.0 --port 8080 --output-dir /data/scans --config /data/scanservjs.config.js &
+    
+    # Create scanservjs user if it doesn't exist (it should from package install)
+    if ! id scanservjs &>/dev/null; then
+        useradd -r -s /bin/false -d /var/lib/scanservjs scanservjs
+        usermod -a -G scanner,lp scanservjs
+    fi
+    
+    # Set up environment for scanservjs
+    export NODE_ENV=production
+    export SCANSERVJS_CONFIG_PATH="/data/scanservjs.config.js"
+    export SCANSERVJS_OUTPUT_DIR="/data/scans"
+    export SCANSERVJS_PREVIEW_DIR="/tmp/scanservjs"
+    
+    # Start scanservjs as the scanservjs user
+    bashio::log.info "Starting scanservjs Node.js application..."
+    cd /usr/lib/scanservjs
+    su -s /bin/bash scanservjs -c "NODE_ENV=production node server/server.js" &
     SCANSERVJS_PID=$!
     bashio::log.info "scanservjs started with PID: $SCANSERVJS_PID"
+    
+    # Wait a moment and check if it's running
+    sleep 3
+    if kill -0 $SCANSERVJS_PID 2>/dev/null; then
+        bashio::log.info "✓ scanservjs is running successfully"
+    else
+        bashio::log.error "✗ scanservjs failed to start"
+    fi
 else
-    bashio::log.error "scanservjs not found - installation failed"
+    bashio::log.error "scanservjs server.js not found at /usr/lib/scanservjs/server/server.js"
 fi
 
 # Wait for all services (trap signals to clean shutdown)
@@ -148,5 +151,14 @@ while true; do
         bashio::log.error "CUPS server died, restarting..."
         cupsd &
         CUPS_PID=$!
+    fi
+    
+    # Check scanservjs health
+    if [ -n "$SCANSERVJS_PID" ] && ! kill -0 $SCANSERVJS_PID 2>/dev/null; then
+        bashio::log.error "scanservjs died, restarting..."
+        cd /usr/lib/scanservjs
+        su -s /bin/bash scanservjs -c "NODE_ENV=production node server/server.js" &
+        SCANSERVJS_PID=$!
+        bashio::log.info "scanservjs restarted with PID: $SCANSERVJS_PID"
     fi
 done
