@@ -1,5 +1,5 @@
 name: Network Print & Scan Server
-version: "1.2.5"
+version: "1.2.6"
 slug: network-print-scan-hub
 description: Leverage your Home Assistant host server to network-enable USB printers and scanners. Provides CUPS printing, SANE scanning, and web interface.
 url: https://github.com/vtechs-ja/ha-cups-sane-addon
