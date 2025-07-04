@@ -27,35 +27,25 @@ echo "$config" | tempio \
     -template /usr/share/sane.conf.tempio \
     -out /etc/sane.d/saned.conf
 
-bashio::log.info "Init config and directories..."
-cp -v -R /etc/cups /data
-rm -v -fR /etc/cups
-ln -v -s /data/cups /etc/cups
+bashio::log.info "Initializing configuration and directories..."
+cp -R /etc/cups /data >/dev/null 2>&1
+rm -rf /etc/cups
+ln -s /data/cups /etc/cups
 
 # Clean up persistent state that might interfere with network discovery
-bashio::log.info "Cleaning up persistent state for fresh network discovery..."
 rm -f /data/cups/cache/* 2>/dev/null || true
 rm -f /data/cups/remote.cache 2>/dev/null || true
 rm -f /data/cups/subscriptions.conf.O 2>/dev/null || true
 rm -f /data/cups/printers.conf.O 2>/dev/null || true
-# Reset any stale browse information
 rm -f /data/cups/browse.conf 2>/dev/null || true
 
-bashio::log.info "Init config and directories completed."
-
-# Initialize SANE and scanning directories
-bashio::log.info "Initializing SANE and scanning directories..."
-mkdir -p /data/scans
-chmod 755 /data/scans
-
-# Initialize SANE configuration
+# Initialize SANE and scanning directories  
 bashio::log.info "Configuring SANE scanner support..."
-mkdir -p /data/sane.d
+mkdir -p /data/scans /data/sane.d
+chmod 755 /data/scans
 cp -R /etc/sane.d/* /data/sane.d/ 2>/dev/null || true
 rm -rf /etc/sane.d
 ln -s /data/sane.d /etc/sane.d
-
-# Ensure scanner access permissions
 usermod -a -G scanner,lp root 2>/dev/null || true
 
 # Generate scanservjs configuration
@@ -63,19 +53,19 @@ echo "$config" | tempio \
     -template /usr/share/scanservjs.config.js.tempio \
     -out /data/scanservjs.config.js
 
-# Check installation debug log
+# Check installation status  
 if [ -f /install-debug.log ]; then
-    bashio::log.info "=== Installation Debug Info ==="
-    while IFS= read -r line; do
-        bashio::log.info "$line"
-    done < /install-debug.log
-    bashio::log.info "=== End Installation Debug ==="
+    if grep -q "✓ scanservjs package installed successfully" /install-debug.log; then
+        bashio::log.info "✓ scanservjs installation verified"
+    else
+        bashio::log.warning "⚠ scanservjs installation may have issues"
+        bashio::log.info "Check /install-debug.log for details"
+    fi
 else
-    bashio::log.error "No installation debug log found at /install-debug.log - build may have failed!"
+    bashio::log.error "No installation log found - build may have failed!"
 fi
 
 # Clear network cache and prepare for fresh service advertisement
-bashio::log.info "Clearing network cache for fresh service discovery..."
 rm -f /var/run/avahi-daemon/pid 2>/dev/null || true
 rm -f /var/run/avahi-daemon/socket 2>/dev/null || true
 rm -f /run/dbus/pid 2>/dev/null || true
@@ -83,8 +73,8 @@ rm -f /var/run/dbus/pid 2>/dev/null || true
 rm -f /data/cups/cache/* 2>/dev/null || true
 rm -f /data/cups/remote.cache 2>/dev/null || true
 
-# For HA addons, we start services manually (not using S6 to avoid conflicts)
-bashio::log.info "Starting services manually for HA addon compatibility..."
+# Start services
+bashio::log.info "Starting network services..."
 
 # Start DBUS for Avahi communication
 bashio::log.info "Starting DBUS daemon for service advertisement..."
@@ -110,11 +100,9 @@ cupsd &
 CUPS_PID=$!
 
 # Wait for CUPS to be ready
-bashio::log.info "Waiting for CUPS server to be ready..."
 CUPS_TIMEOUT=30
 CUPS_COUNTER=0
 until nc -z localhost 631; do
-  bashio::log.info "Waiting for CUPS server to be ready..."
   sleep 2
   CUPS_COUNTER=$((CUPS_COUNTER + 1))
   if [ $CUPS_COUNTER -ge $CUPS_TIMEOUT ]; then
@@ -132,35 +120,21 @@ fi
 # Start scanservjs using the correct Node.js command
 bashio::log.info "Starting scanservjs..."
 
-# Debug scanservjs installation
-bashio::log.info "Checking scanservjs installation..."
-if [ -f /usr/lib/scanservjs/server/server.js ]; then
-    bashio::log.info "✓ scanservjs server.js found at /usr/lib/scanservjs/server/server.js"
-    bashio::log.info "File permissions: $(ls -la /usr/lib/scanservjs/server/server.js)"
-else
-    bashio::log.error "✗ scanservjs server.js not found at /usr/lib/scanservjs/server/server.js"
-    bashio::log.info "Looking for scanservjs files in other locations..."
-    find /usr -name "*scanservjs*" -type f 2>/dev/null | head -10 | while read line; do
-        bashio::log.info "Found: $line"
-    done
+# Check scanservjs installation
+if [ ! -f /usr/lib/scanservjs/server/server.js ]; then
+    bashio::log.error "✗ scanservjs server.js not found - installation failed!"
+    exit 1
 fi
-
-# Check Node.js installation
-bashio::log.info "Node.js version: $(node --version 2>/dev/null || echo 'Node.js not found')"
-bashio::log.info "NPM version: $(npm --version 2>/dev/null || echo 'NPM not found')"
 
 if [ -f /usr/lib/scanservjs/server/server.js ]; then
     # Ensure directories exist
     mkdir -p /data/scans /tmp/scanservjs
     chmod 755 /data/scans /tmp/scanservjs
     
-    # Create scanservjs user if it doesn't exist (it should from package install)
+    # Create scanservjs user if it doesn't exist
     if ! id scanservjs &>/dev/null; then
-        bashio::log.info "Creating scanservjs user..."
         useradd -r -s /bin/false -d /var/lib/scanservjs scanservjs
         usermod -a -G scanner,lp scanservjs
-    else
-        bashio::log.info "✓ scanservjs user already exists"
     fi
     
     # Set up environment for scanservjs
@@ -169,36 +143,11 @@ if [ -f /usr/lib/scanservjs/server/server.js ]; then
     export SCANSERVJS_OUTPUT_DIR="/data/scans"
     export SCANSERVJS_PREVIEW_DIR="/tmp/scanservjs"
     
-    # Debug environment
-    bashio::log.info "Environment variables:"
-    bashio::log.info "NODE_ENV=$NODE_ENV"
-    bashio::log.info "SCANSERVJS_CONFIG_PATH=$SCANSERVJS_CONFIG_PATH"
-    bashio::log.info "SCANSERVJS_OUTPUT_DIR=$SCANSERVJS_OUTPUT_DIR"
-    bashio::log.info "SCANSERVJS_PREVIEW_DIR=$SCANSERVJS_PREVIEW_DIR"
-    
-    # Check config file
-    if [ -f "$SCANSERVJS_CONFIG_PATH" ]; then
-        bashio::log.info "✓ scanservjs config file exists"
-    else
-        bashio::log.error "✗ scanservjs config file missing at $SCANSERVJS_CONFIG_PATH"
-    fi
-    
     # Start scanservjs as the scanservjs user
-    bashio::log.info "Starting scanservjs Node.js application..."
+    bashio::log.info "Starting scanservjs..."
     cd /usr/lib/scanservjs
-    
-    # Test the command first
-    bashio::log.info "Testing scanservjs startup command..."
-    if su -s /bin/bash scanservjs -c "NODE_ENV=production node server/server.js --help 2>&1" 2>/dev/null; then
-        bashio::log.info "✓ scanservjs command test successful"
-    else
-        bashio::log.warning "scanservjs command test failed, trying anyway..."
-    fi
-    
-    # Start in background with output redirected
     su -s /bin/bash scanservjs -c "NODE_ENV=production node server/server.js 2>&1 | logger -t scanservjs" &
     SCANSERVJS_PID=$!
-    bashio::log.info "scanservjs started with PID: $SCANSERVJS_PID"
     
     # Wait a moment and check if it's running
     sleep 5
@@ -241,7 +190,6 @@ while true; do
         AVAHI_PID=$!
         sleep 2
         # Also restart CUPS to re-register services
-        bashio::log.info "Restarting CUPS to re-register with Avahi..."
         kill $CUPS_PID 2>/dev/null || true
         cupsd &
         CUPS_PID=$!

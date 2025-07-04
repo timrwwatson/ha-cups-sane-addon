@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
-LABEL io.hass.version="1.2.6" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
+LABEL io.hass.version="1.2.7" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -78,44 +78,24 @@ RUN set -e && \
     echo "✓ dpkg installation completed" >> /install-debug.log && \
     rm -f /tmp/scanservjs.deb
 
-# Verify installation with detailed results
+# Verify installation with minimal logging
 RUN echo "" >> /install-debug.log && \
     echo "=== Installation Verification ===" >> /install-debug.log && \
     \
-    echo "1. Checking package in dpkg:" >> /install-debug.log && \
-    if dpkg -l | grep scanservjs >> /install-debug.log; then \
-        echo "✓ Package found in dpkg" >> /install-debug.log; \
+    if dpkg -l | grep -q scanservjs; then \
+        echo "✓ scanservjs package installed successfully" >> /install-debug.log; \
     else \
-        echo "✗ Package not found in dpkg" >> /install-debug.log; \
+        echo "✗ scanservjs package not found" >> /install-debug.log; \
     fi && \
     \
-    echo "" >> /install-debug.log && \
-    echo "2. Searching for scanservjs files:" >> /install-debug.log && \
-    find /usr /opt -name "*scanservjs*" -type f 2>/dev/null >> /install-debug.log || echo "No scanservjs files found" >> /install-debug.log && \
-    \
-    echo "" >> /install-debug.log && \
-    echo "3. Checking systemd service file:" >> /install-debug.log && \
-    if [ -f /lib/systemd/system/scanservjs.service ]; then \
-        echo "✓ Found systemd service file:" >> /install-debug.log && \
-        cat /lib/systemd/system/scanservjs.service >> /install-debug.log; \
+    if [ -f /usr/lib/scanservjs/server/server.js ]; then \
+        echo "✓ scanservjs server.js found" >> /install-debug.log; \
     else \
-        echo "✗ No systemd service file found" >> /install-debug.log; \
+        echo "✗ scanservjs server.js missing" >> /install-debug.log; \
     fi && \
     \
-    echo "" >> /install-debug.log && \
-    echo "4. Checking package contents:" >> /install-debug.log && \
-    dpkg -L scanservjs | head -20 >> /install-debug.log && \
-    \
-    echo "" >> /install-debug.log && \
-    echo "5. Looking for Node.js files:" >> /install-debug.log && \
-    find /usr/lib /usr/share /opt -name "*.js" -path "*scanservjs*" 2>/dev/null >> /install-debug.log || echo "No Node.js files found" >> /install-debug.log && \
-    \
-    echo "" >> /install-debug.log && \
-    echo "6. Complete scanservjs directory structure:" >> /install-debug.log && \
-    find /usr/lib/scanservjs -type f 2>/dev/null >> /install-debug.log || echo "No scanservjs directory found" >> /install-debug.log && \
-    \
-    echo "" >> /install-debug.log && \
-    echo "=== Debug Summary Complete ===" >> /install-debug.log
+    echo "Total installed files: $(find /usr/lib/scanservjs -type f 2>/dev/null | wc -l)" >> /install-debug.log && \
+    echo "=== Installation Complete ===" >> /install-debug.log
 
 
 # Add user and disable sudo password checking
