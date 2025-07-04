@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
-LABEL io.hass.version="1.2.3" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
+LABEL io.hass.version="1.2.4" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -108,7 +108,11 @@ RUN echo "" >> /install-debug.log && \
     \
     echo "" >> /install-debug.log && \
     echo "5. Looking for Node.js files:" >> /install-debug.log && \
-    find /usr/lib /usr/share /opt -name "*.js" -path "*scanservjs*" 2>/dev/null | head -10 >> /install-debug.log || echo "No Node.js files found" >> /install-debug.log && \
+    find /usr/lib /usr/share /opt -name "*.js" -path "*scanservjs*" 2>/dev/null >> /install-debug.log || echo "No Node.js files found" >> /install-debug.log && \
+    \
+    echo "" >> /install-debug.log && \
+    echo "6. Complete scanservjs directory structure:" >> /install-debug.log && \
+    find /usr/lib/scanservjs -type f 2>/dev/null >> /install-debug.log || echo "No scanservjs directory found" >> /install-debug.log && \
     \
     echo "" >> /install-debug.log && \
     echo "=== Debug Summary Complete ===" >> /install-debug.log
