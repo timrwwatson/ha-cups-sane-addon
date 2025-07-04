@@ -25,12 +25,6 @@ echo "$config" | tempio \
 echo "$config" | tempio \
     -template /usr/share/sane.conf.tempio \
     -out /etc/sane.d/saned.conf
-    
-# Start Avahi, wait for it to start up
-touch /var/run/avahi_configured
-until [ -e /var/run/avahi-daemon/socket ]; do
-  sleep 1s
-done
 
 bashio::log.info "Init config and directories..."
 cp -v -R /etc/cups /data
@@ -83,6 +77,8 @@ fi
 bashio::log.info "Clearing network cache for fresh service discovery..."
 rm -f /var/run/avahi-daemon/pid 2>/dev/null || true
 rm -f /var/run/avahi-daemon/socket 2>/dev/null || true
+rm -f /run/dbus/pid 2>/dev/null || true
+rm -f /var/run/dbus/pid 2>/dev/null || true
 rm -f /data/cups/cache/* 2>/dev/null || true
 rm -f /data/cups/remote.cache 2>/dev/null || true
 
@@ -91,7 +87,9 @@ bashio::log.info "Starting services manually for HA addon compatibility..."
 
 # Start DBUS
 bashio::log.info "Starting DBUS daemon..."
-mkdir -p /var/run/dbus
+mkdir -p /var/run/dbus /run/dbus
+# Ensure clean DBUS environment
+rm -f /run/dbus/pid /var/run/dbus/pid 2>/dev/null || true
 dbus-daemon --system --nofork &
 DBUS_PID=$!
 
