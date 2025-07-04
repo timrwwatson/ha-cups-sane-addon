@@ -18,9 +18,7 @@ echo "$config" | tempio \
     -template /usr/share/cupsd.conf.tempio \
     -out /etc/cups/cupsd.conf
 
-echo "$config" | tempio \
-    -template /usr/share/avahi-daemon.conf.tempio \
-    -out /etc/avahi/avahi-daemon.conf
+# Skip Avahi config - using host's existing mDNS service
 
 echo "$config" | tempio \
     -template /usr/share/sane.conf.tempio \
@@ -75,64 +73,18 @@ fi
 
 # Clear network cache and prepare for fresh service advertisement
 bashio::log.info "Clearing network cache for fresh service discovery..."
-rm -f /var/run/avahi-daemon/pid 2>/dev/null || true
-rm -f /var/run/avahi-daemon/socket 2>/dev/null || true
-rm -f /run/dbus/pid 2>/dev/null || true
-rm -f /var/run/dbus/pid 2>/dev/null || true
 rm -f /data/cups/cache/* 2>/dev/null || true
 rm -f /data/cups/remote.cache 2>/dev/null || true
 
 # For HA addons, we start services manually (not using S6 to avoid conflicts)
 bashio::log.info "Starting services manually for HA addon compatibility..."
 
-# Start DBUS
-bashio::log.info "Starting DBUS daemon..."
-mkdir -p /var/run/dbus /run/dbus
-# Ensure clean DBUS environment
-rm -f /run/dbus/pid /var/run/dbus/pid 2>/dev/null || true
-dbus-daemon --system --nofork &
-DBUS_PID=$!
+# Skip DBUS daemon - not needed without our own Avahi daemon
+bashio::log.info "Using simplified service startup (no DBUS/Avahi conflicts)"
 
-# Wait for DBUS to be ready
-bashio::log.info "Waiting for DBUS to be ready..."
-until dbus-send --system --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames >/dev/null 2>&1; do
-    sleep 1
-done
-bashio::log.info "DBUS is ready"
-
-# Start Avahi  
-bashio::log.info "Starting Avahi daemon..."
-avahi-daemon &
-AVAHI_PID=$!
-
-# Wait for Avahi to be ready and fully advertising
-bashio::log.info "Waiting for Avahi to be ready..."
-AVAHI_TIMEOUT=30
-AVAHI_COUNTER=0
-until [ -e /var/run/avahi-daemon/socket ]; do
-    sleep 1
-    AVAHI_COUNTER=$((AVAHI_COUNTER + 1))
-    if [ $AVAHI_COUNTER -ge $AVAHI_TIMEOUT ]; then
-        bashio::log.error "Avahi socket not ready after $AVAHI_TIMEOUT seconds"
-        break
-    fi
-done
-
-if [ -e /var/run/avahi-daemon/socket ]; then
-    bashio::log.info "Avahi socket is ready"
-    
-    # Test avahi-resolve with timeout
-    bashio::log.info "Testing Avahi resolution..."
-    if timeout 10 avahi-resolve --name localhost.local >/dev/null 2>&1; then
-        bashio::log.info "✓ Avahi resolution test successful"
-    else
-        bashio::log.warning "⚠ Avahi resolution test failed, but continuing..."
-    fi
-    
-    bashio::log.info "Avahi is ready and advertising"
-else
-    bashio::log.error "Avahi socket not available, continuing anyway..."
-fi
+# Skip Avahi daemon - use host's existing mDNS service
+bashio::log.info "Using host's existing mDNS service (homeassistant.local)"
+bashio::log.info "CUPS will register its services with the host's Avahi daemon"
 
 # Start CUPS
 bashio::log.info "Starting CUPS server..."
@@ -250,7 +202,7 @@ else
 fi
 
 # Wait for all services (trap signals to clean shutdown)
-trap 'kill $DBUS_PID $AVAHI_PID $CUPS_PID $SCANSERVJS_PID 2>/dev/null; exit' TERM INT
+trap 'kill $CUPS_PID $SCANSERVJS_PID 2>/dev/null; exit' TERM INT
 
 bashio::log.info "All services started. Addon is running."
 
@@ -264,33 +216,16 @@ while true; do
         CUPS_PID=$!
     fi
     
-    # Check Avahi health and network advertising
-    if ! pgrep avahi-daemon > /dev/null; then
-        bashio::log.error "Avahi daemon died, restarting..."
-        avahi-daemon &
-        AVAHI_PID=$!
-        sleep 3
-        # Also restart CUPS to re-register with Avahi
-        bashio::log.info "Restarting CUPS to re-register with Avahi..."
-        kill $CUPS_PID 2>/dev/null || true
-        cupsd &
-        CUPS_PID=$!
-    fi
-    
-    # Check network discovery health (every 2 minutes)
+    # Check CUPS health (every 2 minutes)
     if [ $(($(date +%s) % 120)) -eq 0 ]; then
-        if ! avahi-browse -t _ipp._tcp 2>/dev/null | grep -q "$(hostname)"; then
-            bashio::log.warning "Network discovery seems broken, refreshing services..."
-            # Restart Avahi and CUPS to refresh network advertising
-            kill $AVAHI_PID 2>/dev/null || true
+        if ! nc -z localhost 631; then
+            bashio::log.warning "CUPS port 631 not responding, refreshing CUPS service..."
+            # Restart CUPS if it's not responding
             kill $CUPS_PID 2>/dev/null || true
             sleep 2
-            avahi-daemon &
-            AVAHI_PID=$!
-            sleep 3
             cupsd &
             CUPS_PID=$!
-            bashio::log.info "Network services refreshed"
+            bashio::log.info "CUPS service refreshed"
         fi
     fi
     
