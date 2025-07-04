@@ -31,7 +31,7 @@ DefaultEncryption IfRequested
 #ServerAlias *
 
 # Set explicit server name for consistent network identity
-ServerName {{.hostname}}.local
+ServerName {{.hostname}}-print.local
 
 # Web interface setting...
 WebInterface Yes

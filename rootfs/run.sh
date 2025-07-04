@@ -18,7 +18,10 @@ echo "$config" | tempio \
     -template /usr/share/cupsd.conf.tempio \
     -out /etc/cups/cupsd.conf
 
-# Skip Avahi config - using host's existing mDNS service
+# Configure Avahi for service advertisement only
+echo "$config" | tempio \
+    -template /usr/share/avahi-daemon.conf.tempio \
+    -out /etc/avahi/avahi-daemon.conf
 
 echo "$config" | tempio \
     -template /usr/share/sane.conf.tempio \
@@ -73,18 +76,33 @@ fi
 
 # Clear network cache and prepare for fresh service advertisement
 bashio::log.info "Clearing network cache for fresh service discovery..."
+rm -f /var/run/avahi-daemon/pid 2>/dev/null || true
+rm -f /var/run/avahi-daemon/socket 2>/dev/null || true
+rm -f /run/dbus/pid 2>/dev/null || true
+rm -f /var/run/dbus/pid 2>/dev/null || true
 rm -f /data/cups/cache/* 2>/dev/null || true
 rm -f /data/cups/remote.cache 2>/dev/null || true
 
 # For HA addons, we start services manually (not using S6 to avoid conflicts)
 bashio::log.info "Starting services manually for HA addon compatibility..."
 
-# Skip DBUS daemon - not needed without our own Avahi daemon
-bashio::log.info "Using simplified service startup (no DBUS/Avahi conflicts)"
+# Start DBUS for Avahi communication
+bashio::log.info "Starting DBUS daemon for service advertisement..."
+mkdir -p /var/run/dbus /run/dbus
+dbus-daemon --system --nofork &
+DBUS_PID=$!
 
-# Skip Avahi daemon - use host's existing mDNS service
-bashio::log.info "Using host's existing mDNS service (homeassistant.local)"
-bashio::log.info "CUPS will register its services with the host's Avahi daemon"
+# Wait for DBUS to be ready
+sleep 2
+
+# Start Avahi daemon with unique hostname to avoid conflicts
+bashio::log.info "Starting Avahi daemon for printer service advertisement..."
+bashio::log.info "Using hostname: ${hostname}-print.local to avoid conflicts"
+avahi-daemon &
+AVAHI_PID=$!
+
+# Wait for Avahi socket to be ready
+sleep 3
 
 # Start CUPS
 bashio::log.info "Starting CUPS server..."
@@ -202,7 +220,7 @@ else
 fi
 
 # Wait for all services (trap signals to clean shutdown)
-trap 'kill $CUPS_PID $SCANSERVJS_PID 2>/dev/null; exit' TERM INT
+trap 'kill $DBUS_PID $AVAHI_PID $CUPS_PID $SCANSERVJS_PID 2>/dev/null; exit' TERM INT
 
 bashio::log.info "All services started. Addon is running."
 
@@ -212,6 +230,19 @@ while true; do
     # Basic health check
     if ! pgrep cupsd > /dev/null; then
         bashio::log.error "CUPS server died, restarting..."
+        cupsd &
+        CUPS_PID=$!
+    fi
+    
+    # Check Avahi health and restart if needed
+    if ! pgrep avahi-daemon > /dev/null; then
+        bashio::log.error "Avahi daemon died, restarting..."
+        avahi-daemon &
+        AVAHI_PID=$!
+        sleep 2
+        # Also restart CUPS to re-register services
+        bashio::log.info "Restarting CUPS to re-register with Avahi..."
+        kill $CUPS_PID 2>/dev/null || true
         cupsd &
         CUPS_PID=$!
     fi
