@@ -36,6 +36,16 @@ bashio::log.info "Init config and directories..."
 cp -v -R /etc/cups /data
 rm -v -fR /etc/cups
 ln -v -s /data/cups /etc/cups
+
+# Clean up persistent state that might interfere with network discovery
+bashio::log.info "Cleaning up persistent state for fresh network discovery..."
+rm -f /data/cups/cache/* 2>/dev/null || true
+rm -f /data/cups/remote.cache 2>/dev/null || true
+rm -f /data/cups/subscriptions.conf.O 2>/dev/null || true
+rm -f /data/cups/printers.conf.O 2>/dev/null || true
+# Reset any stale browse information
+rm -f /data/cups/browse.conf 2>/dev/null || true
+
 bashio::log.info "Init config and directories completed."
 
 # Initialize SANE and scanning directories
@@ -69,6 +79,13 @@ else
     bashio::log.error "No installation debug log found at /install-debug.log - build may have failed!"
 fi
 
+# Clear network cache and prepare for fresh service advertisement
+bashio::log.info "Clearing network cache for fresh service discovery..."
+rm -f /var/run/avahi-daemon/pid 2>/dev/null || true
+rm -f /var/run/avahi-daemon/socket 2>/dev/null || true
+rm -f /data/cups/cache/* 2>/dev/null || true
+rm -f /data/cups/remote.cache 2>/dev/null || true
+
 # For HA addons, we start services manually (not using S6 to avoid conflicts)
 bashio::log.info "Starting services manually for HA addon compatibility..."
 
@@ -79,15 +96,23 @@ dbus-daemon --system --nofork &
 DBUS_PID=$!
 
 # Wait for DBUS to be ready
-sleep 2
+bashio::log.info "Waiting for DBUS to be ready..."
+until dbus-send --system --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames >/dev/null 2>&1; do
+    sleep 1
+done
+bashio::log.info "DBUS is ready"
 
 # Start Avahi  
 bashio::log.info "Starting Avahi daemon..."
 avahi-daemon &
 AVAHI_PID=$!
 
-# Wait for Avahi to be ready
-sleep 2
+# Wait for Avahi to be ready and fully advertising
+bashio::log.info "Waiting for Avahi to be ready..."
+until [ -e /var/run/avahi-daemon/socket ] && avahi-resolve --name localhost.local >/dev/null 2>&1; do
+    sleep 1
+done
+bashio::log.info "Avahi is ready and advertising"
 
 # Start CUPS
 bashio::log.info "Starting CUPS server..."
@@ -151,6 +176,36 @@ while true; do
         bashio::log.error "CUPS server died, restarting..."
         cupsd &
         CUPS_PID=$!
+    fi
+    
+    # Check Avahi health and network advertising
+    if ! pgrep avahi-daemon > /dev/null; then
+        bashio::log.error "Avahi daemon died, restarting..."
+        avahi-daemon &
+        AVAHI_PID=$!
+        sleep 3
+        # Also restart CUPS to re-register with Avahi
+        bashio::log.info "Restarting CUPS to re-register with Avahi..."
+        kill $CUPS_PID 2>/dev/null || true
+        cupsd &
+        CUPS_PID=$!
+    fi
+    
+    # Check network discovery health (every 2 minutes)
+    if [ $(($(date +%s) % 120)) -eq 0 ]; then
+        if ! avahi-browse -t _ipp._tcp 2>/dev/null | grep -q "$(hostname)"; then
+            bashio::log.warning "Network discovery seems broken, refreshing services..."
+            # Restart Avahi and CUPS to refresh network advertising
+            kill $AVAHI_PID 2>/dev/null || true
+            kill $CUPS_PID 2>/dev/null || true
+            sleep 2
+            avahi-daemon &
+            AVAHI_PID=$!
+            sleep 3
+            cupsd &
+            CUPS_PID=$!
+            bashio::log.info "Network services refreshed"
+        fi
     fi
     
     # Check scanservjs health
