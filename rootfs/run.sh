@@ -2,56 +2,116 @@
 
 ulimit -n 1048576
 
+# Get configuration efficiently
 hostname=$(bashio::info.hostname)
-
-# Get all possible hostnames from configuration
 result=$(bashio::api.supervisor GET /core/api/config true || true)
 internal=$(bashio::jq "$result" '.internal_url' | cut -d'/' -f3 | cut -d':' -f1)
 external=$(bashio::jq "$result" '.external_url' | cut -d'/' -f3 | cut -d':' -f1)
 
-# Fill config file templates with runtime data
 config=$(jq --arg internal "$internal" --arg external "$external" --arg hostname "$hostname" \
     '{internal: $internal, external: $external, hostname: $hostname}' \
     /data/options.json)
 
-echo "$config" | tempio \
-    -template /usr/share/cupsd.conf.tempio \
-    -out /etc/cups/cupsd.conf
+# Generate configuration files
+echo "$config" | tempio -template /usr/share/cupsd.conf.tempio -out /etc/cups/cupsd.conf
+echo "$config" | tempio -template /usr/share/avahi-daemon.conf.tempio -out /etc/avahi/avahi-daemon.conf
+echo "$config" | tempio -template /usr/share/sane.conf.tempio -out /etc/sane.d/saned.conf
 
-# Configure Avahi for service advertisement only
-echo "$config" | tempio \
-    -template /usr/share/avahi-daemon.conf.tempio \
-    -out /etc/avahi/avahi-daemon.conf
+bashio::log.info "Initializing print and scan services..."
 
-echo "$config" | tempio \
-    -template /usr/share/sane.conf.tempio \
-    -out /etc/sane.d/saned.conf
+# Install additional printer drivers if configured (runtime optimization)
+PRINTER_SUPPORT=$(bashio::config 'printer_support' 'common')
+if [[ "$PRINTER_SUPPORT" != "minimal" ]]; then
+    PRINTER_PACKAGES=""
+    case $PRINTER_SUPPORT in
+        common)
+            PRINTER_PACKAGES="printer-driver-escpr printer-driver-splix openprinting-ppds"
+            ;;
+        full)
+            PRINTER_PACKAGES="printer-driver-all-enforce openprinting-ppds hpijs-ppds hp-ppd hplip"
+            ;;
+    esac
+    
+    if [[ -n "$PRINTER_PACKAGES" ]]; then
+        bashio::log.info "Installing $PRINTER_SUPPORT printer drivers..."
+        apt-get update > /dev/null 2>&1
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PRINTER_PACKAGES > /dev/null 2>&1
+        apt-get clean > /dev/null 2>&1
+        rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+        bashio::log.info "✓ Additional printer drivers installed"
+    fi
+fi
 
-bashio::log.info "Initializing configuration and directories..."
-cp -R /etc/cups /data >/dev/null 2>&1
-rm -rf /etc/cups
-ln -s /data/cups /etc/cups
+# Install OCR languages efficiently
+if bashio::config.exists 'ocr_languages'; then
+    OCR_LANGUAGES=$(bashio::config 'ocr_languages[]')
+    PACKAGES=""
+    for lang in $OCR_LANGUAGES; do
+        [[ "$lang" != "eng" ]] && PACKAGES="$PACKAGES tesseract-ocr-$lang"
+    done
+    
+    if [[ -n "$PACKAGES" ]]; then
+        bashio::log.info "Installing additional OCR languages..."
+        apt-get update > /dev/null 2>&1
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PACKAGES > /dev/null 2>&1
+        apt-get clean > /dev/null 2>&1
+        rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+        bashio::log.info "✓ OCR languages installed"
+    fi
+fi
 
-# Clean up persistent state that might interfere with network discovery
-rm -f /data/cups/cache/* 2>/dev/null || true
-rm -f /data/cups/remote.cache 2>/dev/null || true
-rm -f /data/cups/subscriptions.conf.O 2>/dev/null || true
-rm -f /data/cups/printers.conf.O 2>/dev/null || true
-rm -f /data/cups/browse.conf 2>/dev/null || true
+# Initialize directories efficiently
+cp -R /etc/cups /data 2>/dev/null || true
+rm -rf /etc/cups && ln -sf /data/cups /etc/cups
 
-# Initialize SANE and scanning directories  
-bashio::log.info "Configuring SANE scanner support..."
 mkdir -p /data/scans /data/sane.d
-chmod 755 /data/scans
 cp -R /etc/sane.d/* /data/sane.d/ 2>/dev/null || true
-rm -rf /etc/sane.d
-ln -s /data/sane.d /etc/sane.d
-usermod -a -G scanner,lp root 2>/dev/null || true
+rm -rf /etc/sane.d && ln -sf /data/sane.d /etc/sane.d
 
 # Generate scanservjs configuration
 echo "$config" | tempio \
     -template /usr/share/scanservjs.config.js.tempio \
     -out /data/scanservjs.config.js
+
+# Update OCR language configuration based on user settings
+if bashio::config.exists 'ocr_languages'; then
+    OCR_LANGUAGES=$(bashio::config 'ocr_languages[]')
+    bashio::log.info "Configuring OCR languages: $OCR_LANGUAGES"
+    
+    # Build JavaScript array of language objects
+    LANG_ARRAY="      { key: 'eng', name: 'English' }"
+    for lang in $OCR_LANGUAGES; do
+        case $lang in
+            eng) ;; # Already included
+            deu) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'deu', name: 'German' }" ;;
+            fra) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'fra', name: 'French' }" ;;
+            spa) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'spa', name: 'Spanish' }" ;;
+            ita) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'ita', name: 'Italian' }" ;;
+            por) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'por', name: 'Portuguese' }" ;;
+            nld) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'nld', name: 'Dutch' }" ;;
+            rus) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'rus', name: 'Russian' }" ;;
+            jpn) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'jpn', name: 'Japanese' }" ;;
+            chi_sim) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'chi_sim', name: 'Chinese (Simplified)' }" ;;
+            chi_tra) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'chi_tra', name: 'Chinese (Traditional)' }" ;;
+            ara) LANG_ARRAY="$LANG_ARRAY,\n      { key: 'ara', name: 'Arabic' }" ;;
+        esac
+    done
+    
+    # Replace the languages array in the config file
+    sed -i "s/      { key: 'eng', name: 'English' }/$LANG_ARRAY/" /data/scanservjs.config.js
+    
+    # Also update the text output format language options
+    LANG_OPTIONS="'eng'"
+    for lang in $OCR_LANGUAGES; do
+        if [[ "$lang" != "eng" ]]; then
+            LANG_OPTIONS="$LANG_OPTIONS, '$lang'"
+        fi
+    done
+    
+    # Replace the options array in the text output format
+    sed -i "s/options: \['eng'\]/options: [$LANG_OPTIONS]/" /data/scanservjs.config.js
+    bashio::log.info "✓ OCR language configuration updated"
+fi
 
 # Check installation status  
 if [ -f /install-debug.log ]; then
@@ -65,155 +125,82 @@ else
     bashio::log.error "No installation log found - build may have failed!"
 fi
 
-# Clear network cache and prepare for fresh service advertisement
-rm -f /var/run/avahi-daemon/pid 2>/dev/null || true
-rm -f /var/run/avahi-daemon/socket 2>/dev/null || true
-rm -f /run/dbus/pid 2>/dev/null || true
-rm -f /var/run/dbus/pid 2>/dev/null || true
-rm -f /data/cups/cache/* 2>/dev/null || true
-rm -f /data/cups/remote.cache 2>/dev/null || true
+# Clean up any stale files
+rm -f /var/run/avahi-daemon/* /run/dbus/* /data/cups/cache/* /data/cups/remote.cache 2>/dev/null || true
 
-# Start services
-bashio::log.info "Starting network services..."
-
-# Start DBUS for Avahi communication
-bashio::log.info "Starting DBUS daemon for service advertisement..."
+# Start services efficiently
+bashio::log.info "Starting services..."
 mkdir -p /var/run/dbus /run/dbus
+
+# Start DBUS
 dbus-daemon --system --nofork &
 DBUS_PID=$!
+sleep 1
 
-# Wait for DBUS to be ready
-sleep 2
-
-# Start Avahi daemon with unique hostname to avoid conflicts
-bashio::log.info "Starting Avahi daemon for printer service advertisement..."
-bashio::log.info "Using hostname: ${hostname}-print.local to avoid conflicts"
+# Start Avahi
 avahi-daemon &
 AVAHI_PID=$!
-
-# Wait for Avahi socket to be ready
-sleep 3
+sleep 2
 
 # Start CUPS
-bashio::log.info "Starting CUPS server..."
 cupsd &
 CUPS_PID=$!
 
-# Wait for CUPS to be ready
-CUPS_TIMEOUT=30
-CUPS_COUNTER=0
-until nc -z localhost 631; do
-  sleep 2
-  CUPS_COUNTER=$((CUPS_COUNTER + 1))
-  if [ $CUPS_COUNTER -ge $CUPS_TIMEOUT ]; then
-    bashio::log.error "CUPS server not ready after $((CUPS_TIMEOUT * 2)) seconds"
-    break
-  fi
+# Wait for CUPS to be ready (optimized check)
+for i in {1..15}; do
+    nc -z localhost 631 && break
+    sleep 2
 done
 
 if nc -z localhost 631; then
-  bashio::log.info "✓ CUPS server is ready"
+    bashio::log.info "✓ CUPS ready on port 631"
 else
-  bashio::log.error "✗ CUPS server failed to start properly"
+    bashio::log.error "✗ CUPS failed to start"
 fi
 
-# Start scanservjs using the correct Node.js command
-bashio::log.info "Starting scanservjs..."
-
-# Check scanservjs installation
-if [ ! -f /usr/lib/scanservjs/server/server.js ]; then
-    bashio::log.error "✗ scanservjs server.js not found - installation failed!"
-    exit 1
-fi
-
+# Start scanservjs
 if [ -f /usr/lib/scanservjs/server/server.js ]; then
-    # Ensure directories exist
     mkdir -p /data/scans /tmp/scanservjs
     chmod 755 /data/scans /tmp/scanservjs
     
-    # Create scanservjs user if it doesn't exist
-    if ! id scanservjs &>/dev/null; then
+    id scanservjs &>/dev/null || {
         useradd -r -s /bin/false -d /var/lib/scanservjs scanservjs
         usermod -a -G scanner,lp scanservjs
-    fi
+    }
     
-    # Set up environment for scanservjs
     export NODE_ENV=production
     export SCANSERVJS_CONFIG_PATH="/data/scanservjs.config.js"
     export SCANSERVJS_OUTPUT_DIR="/data/scans"
     export SCANSERVJS_PREVIEW_DIR="/tmp/scanservjs"
     
-    # Start scanservjs as the scanservjs user
-    bashio::log.info "Starting scanservjs..."
     cd /usr/lib/scanservjs
-    su -s /bin/bash scanservjs -c "NODE_ENV=production node server/server.js 2>&1 | logger -t scanservjs" &
+    su -s /bin/bash scanservjs -c "node server/server.js" &
     SCANSERVJS_PID=$!
     
-    # Wait a moment and check if it's running
-    sleep 5
-    if kill -0 $SCANSERVJS_PID 2>/dev/null; then
-        bashio::log.info "✓ scanservjs is running successfully"
-        
-        # Test if port 8080 is listening
-        sleep 2
-        if nc -z localhost 8080; then
-            bashio::log.info "✓ scanservjs is listening on port 8080"
-        else
-            bashio::log.error "✗ scanservjs is not listening on port 8080"
-        fi
+    sleep 3
+    if kill -0 $SCANSERVJS_PID 2>/dev/null && nc -z localhost 8080; then
+        bashio::log.info "✓ scanservjs ready on port 8080"
     else
         bashio::log.error "✗ scanservjs failed to start"
     fi
-else
-    bashio::log.error "scanservjs server.js not found - installation may have failed"
 fi
 
-# Wait for all services (trap signals to clean shutdown)
+# Signal handler for clean shutdown
 trap 'kill $DBUS_PID $AVAHI_PID $CUPS_PID $SCANSERVJS_PID 2>/dev/null; exit' TERM INT
 
-bashio::log.info "All services started. Addon is running."
+bashio::log.info "All services running. Addon ready."
 
-# Keep the script running
+# Lightweight health monitoring
 while true; do
-    sleep 30
-    # Basic health check
-    if ! pgrep cupsd > /dev/null; then
-        bashio::log.error "CUPS server died, restarting..."
-        cupsd &
-        CUPS_PID=$!
-    fi
+    sleep 60
     
-    # Check Avahi health and restart if needed
-    if ! pgrep avahi-daemon > /dev/null; then
-        bashio::log.error "Avahi daemon died, restarting..."
-        avahi-daemon &
-        AVAHI_PID=$!
-        sleep 2
-        # Also restart CUPS to re-register services
-        kill $CUPS_PID 2>/dev/null || true
-        cupsd &
-        CUPS_PID=$!
-    fi
+    # Restart dead services
+    pgrep cupsd > /dev/null || { cupsd & CUPS_PID=$!; }
+    pgrep avahi-daemon > /dev/null || { avahi-daemon & AVAHI_PID=$!; }
     
-    # Check CUPS health (every 2 minutes)
-    if [ $(($(date +%s) % 120)) -eq 0 ]; then
-        if ! nc -z localhost 631; then
-            bashio::log.warning "CUPS port 631 not responding, refreshing CUPS service..."
-            # Restart CUPS if it's not responding
-            kill $CUPS_PID 2>/dev/null || true
-            sleep 2
-            cupsd &
-            CUPS_PID=$!
-            bashio::log.info "CUPS service refreshed"
-        fi
-    fi
-    
-    # Check scanservjs health
-    if [ -n "$SCANSERVJS_PID" ] && ! kill -0 $SCANSERVJS_PID 2>/dev/null; then
-        bashio::log.error "scanservjs died, restarting..."
+    if [[ -n "$SCANSERVJS_PID" ]] && ! kill -0 $SCANSERVJS_PID 2>/dev/null; then
         cd /usr/lib/scanservjs
-        su -s /bin/bash scanservjs -c "NODE_ENV=production node server/server.js" &
+        su -s /bin/bash scanservjs -c "node server/server.js" &
         SCANSERVJS_PID=$!
-        bashio::log.info "scanservjs restarted with PID: $SCANSERVJS_PID"
     fi
 done

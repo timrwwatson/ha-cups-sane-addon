@@ -1,5 +1,5 @@
 name: Network Print & Scan Server
-version: "1.2.7"
+version: "1.4.0"
 slug: network-print-scan-hub
 description: Leverage your Home Assistant host server to network-enable USB printers and scanners. Provides CUPS printing, SANE scanning, and web interface.
 url: https://github.com/vtechs-ja/ha-cups-sane-addon
@@ -29,3 +29,22 @@ ingress_port: 8080
 map:
   - config:rw
   - ssl
+options:
+  printer_support: common
+  ocr_languages:
+    - eng
+schema:
+  printer_support:
+    select(minimal|common|full)
+    name: Printer Driver Support
+    description: |
+      Choose printer driver package level:
+      • minimal: HP, Brother, PDF only (~70% coverage, fastest builds)
+      • common: Add Epson, Canon, Samsung (~85% coverage, balanced)
+      • full: All printer drivers (~99% coverage, largest image)
+  ocr_languages:
+    - select(eng|deu|fra|spa|ita|por|nld|rus|jpn|chi_sim|chi_tra|ara)
+    name: OCR Languages  
+    description: Select additional OCR languages to install for text recognition. English is always included.
+startup: system
+boot: auto

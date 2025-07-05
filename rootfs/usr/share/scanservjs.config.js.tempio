@@ -66,7 +66,7 @@ module.exports = {
         {
           key: 'language',
           type: 'select',
-          options: ['eng', 'deu', 'fra', 'spa', 'ita', 'por', 'nld'],
+          options: ['eng'],
           default: 'eng',
           text: 'Language'
         }
@@ -135,18 +135,12 @@ module.exports = {
     level: 'INFO'
   },
 
-  // OCR settings
+  // OCR settings (languages will be configured dynamically)
   ocr: {
     enabled: true,
     lang: 'eng',
     languages: [
-      { key: 'eng', name: 'English' },
-      { key: 'deu', name: 'German' },
-      { key: 'fra', name: 'French' },
-      { key: 'spa', name: 'Spanish' },
-      { key: 'ita', name: 'Italian' },
-      { key: 'por', name: 'Portuguese' },
-      { key: 'nld', name: 'Dutch' }
+      { key: 'eng', name: 'English' }
     ]
   },
 
