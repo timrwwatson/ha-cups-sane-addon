@@ -5,7 +5,7 @@
 
 # Log general information in error_log - change "warn" to "debug"
 # for troubleshooting...
-LogLevel warn
+LogLevel debug
 PageLogFormat
 
 # Specifies the maximum size of the log files before they are rotated.  The value "0" disables log rotation.
@@ -26,6 +26,10 @@ BrowseLocalProtocols all
 DefaultAuthType Basic
 DefaultEncryption IfRequested
 
+# Windows printer installation compatibility
+DefaultUsername anonymous
+BrowseWebIF Yes
+
 # Host header validation
 # {{.hostname}}.local {{.internal}} {{.external}}
 #ServerAlias *
@@ -43,6 +47,9 @@ IdleExitTimeout 60
 <Location />
   Order allow,deny
   Allow @LOCAL
+  Allow localhost
+  Allow 127.0.0.1
+  Allow ::1
 </Location>
 
 # Restrict access to the admin pages...
@@ -76,6 +83,7 @@ IdleExitTimeout 60
   # Job-related operations must be done by the owner or an administrator...
   <Limit Create-Job Print-Job Print-URI Validate-Job>
     Order deny,allow
+    Allow @LOCAL
   </Limit>
 
   <Limit Send-Document Send-URI Hold-Job Release-Job Restart-Job Purge-Jobs Set-Job-Attributes Create-Job-Subscription Renew-Subscription Cancel-Subscription Get-Notifications Reprocess-Job Cancel-Current-Job Suspend-Current-Job Resume-Job Cancel-My-Jobs Close-Job CUPS-Move-Job CUPS-Get-Document>
@@ -88,6 +96,7 @@ IdleExitTimeout 60
     AuthType Default
     Require user @SYSTEM
     Order deny,allow
+    Allow @LOCAL
   </Limit>
 
   # All printer operations require a printer operator to authenticate...
