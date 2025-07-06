@@ -20,7 +20,7 @@ echo "$config" | tempio -template /usr/share/sane.conf.tempio -out /etc/sane.d/s
 bashio::log.info "Initializing print and scan services..."
 
 # Install additional printer drivers if configured (runtime optimization)
-PRINTER_SUPPORT=$(bashio::config 'printer_support' 'common')
+PRINTER_SUPPORT=$(bashio::config 'printer_support' 'full')
 if [[ "$PRINTER_SUPPORT" != "minimal" ]]; then
     PRINTER_PACKAGES=""
     case $PRINTER_SUPPORT in
@@ -39,6 +39,16 @@ if [[ "$PRINTER_SUPPORT" != "minimal" ]]; then
         apt-get clean > /dev/null 2>&1
         rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
         bashio::log.info "✓ Additional printer drivers installed"
+        
+        # HP-specific initialization
+        if echo "$PRINTER_PACKAGES" | grep -q "hplip"; then
+            bashio::log.info "Initializing HP scanner support..."
+            # Create HP configuration directory
+            mkdir -p /etc/hp /var/lib/hp
+            # Initialize HP system (non-interactive)
+            /usr/bin/hp-setup --help > /dev/null 2>&1 || true
+            bashio::log.info "✓ HP scanner support initialized"
+        fi
     fi
 fi
 
@@ -67,6 +77,14 @@ rm -rf /etc/cups && ln -sf /data/cups /etc/cups
 mkdir -p /data/scans /data/sane.d
 cp -R /etc/sane.d/* /data/sane.d/ 2>/dev/null || true
 rm -rf /etc/sane.d && ln -sf /data/sane.d /etc/sane.d
+
+# Ensure HP SANE backend is enabled
+if [ -f /data/sane.d/dll.conf ]; then
+    if ! grep -q "^hpaio" /data/sane.d/dll.conf; then
+        echo "hpaio" >> /data/sane.d/dll.conf
+        bashio::log.info "✓ HP SANE backend (hpaio) enabled"
+    fi
+fi
 
 # Generate scanservjs configuration
 echo "$config" | tempio \
@@ -163,14 +181,17 @@ chmod 666 /dev/bus/usb/*/*  2>/dev/null || true
 chown -R root:scanner /dev/bus/usb/ 2>/dev/null || true
 
 # Add sane-port service definition if not present
-if ! grep -q "sane-port" /etc/services; then
+if [ ! -f /etc/services ]; then
+    touch /etc/services
+fi
+if ! grep -q "sane-port" /etc/services 2>/dev/null; then
     echo "sane-port 6566/tcp # SANE daemon" >> /etc/services
 fi
 
 # Test scanner detection directly with SANE
 bashio::log.info "Testing scanner detection..."
 SCANNERS=$(scanimage -L 2>/dev/null | grep -c "device" || echo "0")
-if [[ "$SCANNERS" -gt 0 ]]; then
+if [[ $SCANNERS -gt 0 ]]; then
     bashio::log.info "✓ Found $SCANNERS scanner(s)"
     scanimage -L | while read line; do
         bashio::log.info "  $line"
@@ -182,6 +203,25 @@ else
     lsusb 2>/dev/null || bashio::log.info "  lsusb not available"
     bashio::log.info "Trying sane-find-scanner..."
     sane-find-scanner 2>/dev/null || bashio::log.info "  sane-find-scanner not available"
+    
+    # Check for HP-specific issues
+    if sane-find-scanner 2>/dev/null | grep -q "HP.*DeskJet"; then
+        bashio::log.info "HP DeskJet detected, checking HP drivers..."
+        if [ -f /usr/bin/hp-scan ]; then
+            bashio::log.info "  ✓ HP scanning tools available"
+            hp-scan -g 2>/dev/null || bashio::log.info "  HP scanner test completed"
+        else
+            bashio::log.info "  ⚠ HP scanning tools not found"
+        fi
+        
+        # Check if hpaio backend is available
+        if [ -f /usr/lib/*/sane/libsane-hpaio.so.* ]; then
+            bashio::log.info "  ✓ HP SANE backend (hpaio) available"
+        else
+            bashio::log.info "  ⚠ HP SANE backend (hpaio) not found"
+        fi
+    fi
+    
     bashio::log.info "SANE backends available:"
     ls /usr/lib/*/sane/ 2>/dev/null | head -10 || bashio::log.info "  No SANE backends directory found"
     bashio::log.info "SANE DLL configuration:"
@@ -231,6 +271,7 @@ if [ -f /usr/lib/scanservjs/server/server.js ]; then
     sleep 3
     if kill -0 $SCANSERVJS_PID 2>/dev/null && nc -z localhost 8080; then
         bashio::log.info "✓ scanservjs ready on port 8080"
+        bashio::log.info "  (scanservjs logging set to ERROR level to reduce log noise)"
     else
         bashio::log.error "✗ scanservjs failed to start"
     fi

@@ -132,7 +132,7 @@ module.exports = {
 
   // Logging configuration
   log: {
-    level: 'INFO'
+    level: 'ERROR'
   },
 
   // OCR settings (languages will be configured dynamically)
