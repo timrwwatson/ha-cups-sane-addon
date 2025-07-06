@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
-LABEL io.hass.version="1.4.3" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
+LABEL io.hass.version="1.4.4" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 

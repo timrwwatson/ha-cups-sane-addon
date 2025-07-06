@@ -158,6 +158,37 @@ else
     bashio::log.error "✗ CUPS failed to start"
 fi
 
+# Set up USB device permissions for scanners
+chmod 666 /dev/bus/usb/*/*  2>/dev/null || true
+chown -R root:scanner /dev/bus/usb/ 2>/dev/null || true
+
+# Start SANE daemon for scanner detection
+saned -a sane-port &
+SANED_PID=$!
+sleep 1
+
+# Check if SANE daemon is running
+if kill -0 $SANED_PID 2>/dev/null; then
+    bashio::log.info "✓ SANE daemon ready"
+    
+    # Test scanner detection
+    bashio::log.info "Testing scanner detection..."
+    SCANNERS=$(scanimage -L 2>/dev/null | grep -c "device" || echo "0")
+    if [[ "$SCANNERS" -gt 0 ]]; then
+        bashio::log.info "✓ Found $SCANNERS scanner(s)"
+        scanimage -L | while read line; do
+            bashio::log.info "  $line"
+        done
+    else
+        bashio::log.warning "⚠ No scanners detected by SANE"
+        bashio::log.info "Check that scanner is connected and powered on"
+        bashio::log.info "Available SANE backends:"
+        sane-find-scanner 2>/dev/null || bashio::log.info "  sane-find-scanner not available"
+    fi
+else
+    bashio::log.error "✗ SANE daemon failed to start"
+fi
+
 # Start scanservjs
 if [ -f /usr/lib/scanservjs/server/server.js ]; then
     mkdir -p /data/scans /tmp/scanservjs
@@ -165,6 +196,7 @@ if [ -f /usr/lib/scanservjs/server/server.js ]; then
     
     id scanservjs &>/dev/null || {
         useradd -r -s /bin/false -d /var/lib/scanservjs scanservjs
+        groupadd -f scanner
         usermod -a -G scanner,lp scanservjs
     }
     
@@ -172,6 +204,7 @@ if [ -f /usr/lib/scanservjs/server/server.js ]; then
     export SCANSERVJS_CONFIG_PATH="/data/scanservjs.config.js"
     export SCANSERVJS_OUTPUT_DIR="/data/scans"
     export SCANSERVJS_PREVIEW_DIR="/tmp/scanservjs"
+    export SANE_DEBUG_DLL=1
     
     cd /usr/lib/scanservjs
     su -s /bin/bash scanservjs -c "node server/server.js" &
@@ -186,7 +219,7 @@ if [ -f /usr/lib/scanservjs/server/server.js ]; then
 fi
 
 # Signal handler for clean shutdown
-trap 'kill $DBUS_PID $AVAHI_PID $CUPS_PID $SCANSERVJS_PID 2>/dev/null; exit' TERM INT
+trap 'kill $DBUS_PID $AVAHI_PID $CUPS_PID $SANED_PID $SCANSERVJS_PID 2>/dev/null; exit' TERM INT
 
 bashio::log.info "All services running. Addon ready."
 
@@ -197,6 +230,7 @@ while true; do
     # Restart dead services
     pgrep cupsd > /dev/null || { cupsd & CUPS_PID=$!; }
     pgrep avahi-daemon > /dev/null || { avahi-daemon & AVAHI_PID=$!; }
+    pgrep saned > /dev/null || { saned -a sane-port & SANED_PID=$!; }
     
     if [[ -n "$SCANSERVJS_PID" ]] && ! kill -0 $SCANSERVJS_PID 2>/dev/null; then
         cd /usr/lib/scanservjs
