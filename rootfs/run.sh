@@ -172,6 +172,23 @@ done
 
 if nc -z localhost 631; then
     bashio::log.info "✓ CUPS ready on port 631"
+    
+    # Display Windows connection information
+    bashio::log.info "Windows printer connection:"
+    bashio::log.info "  Add printer URL: http://$(hostname -I | awk '{print $1}'):631/printers/[printer-name]"
+    bashio::log.info "  Or use: \\\\$(hostname -I | awk '{print $1}'):631"
+    bashio::log.info "  Admin interface: http://$(hostname -I | awk '{print $1}'):631"
+    
+    # Test if printer queues exist
+    if [ -d /data/cups/ppd ] && [ "$(ls -A /data/cups/ppd 2>/dev/null)" ]; then
+        bashio::log.info "✓ Printer queues configured"
+        ls /data/cups/ppd/*.ppd 2>/dev/null | while read ppd; do
+            printer_name=$(basename "$ppd" .ppd)
+            bashio::log.info "  Printer: $printer_name"
+        done
+    else
+        bashio::log.info "⚠ No printer queues configured - use CUPS admin interface to add printers"
+    fi
 else
     bashio::log.error "✗ CUPS failed to start"
 fi
@@ -246,6 +263,8 @@ if [ -f /usr/lib/scanservjs/server/server.js ]; then
     export SCANSERVJS_PREVIEW_DIR="/tmp/scanservjs"
     export SANE_DEBUG_DLL=1
     export SANE_CONFIG_DIR="/etc/sane.d"
+    export LOG_LEVEL=error
+    export SCANSERVJS_LOG_LEVEL=error
     
     # Test if scanservjs user can access SANE
     bashio::log.info "Testing SANE access for scanservjs user..."
@@ -260,11 +279,11 @@ if [ -f /usr/lib/scanservjs/server/server.js ]; then
     cd /usr/lib/scanservjs
     if [ "$USE_ROOT" = "true" ]; then
         bashio::log.info "Starting scanservjs as root due to permission issues"
-        node server/server.js &
+        LOG_LEVEL=error node server/server.js &
         SCANSERVJS_PID=$!
     else
         bashio::log.info "Starting scanservjs as dedicated user"
-        su -s /bin/bash scanservjs -c "node server/server.js" &
+        su -s /bin/bash scanservjs -c "LOG_LEVEL=error node server/server.js" &
         SCANSERVJS_PID=$!
     fi
     
@@ -293,10 +312,10 @@ while true; do
     if [[ -n "$SCANSERVJS_PID" ]] && ! kill -0 $SCANSERVJS_PID 2>/dev/null; then
         cd /usr/lib/scanservjs
         if [ "$USE_ROOT" = "true" ]; then
-            node server/server.js &
+            LOG_LEVEL=error node server/server.js &
             SCANSERVJS_PID=$!
         else
-            su -s /bin/bash scanservjs -c "node server/server.js" &
+            su -s /bin/bash scanservjs -c "LOG_LEVEL=error node server/server.js" &
             SCANSERVJS_PID=$!
         fi
     fi
