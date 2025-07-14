@@ -1,7 +1,5 @@
 #!/usr/bin/with-contenv bashio
 
-ulimit -n 1048576
-
 # Get configuration efficiently
 hostname=$(bashio::info.hostname)
 result=$(bashio::api.supervisor GET /core/api/config true || true)
