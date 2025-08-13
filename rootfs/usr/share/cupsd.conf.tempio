@@ -36,7 +36,8 @@ DefaultShared Yes
 
 # Host header validation
 # {{.hostname}}.local {{.internal}} {{.external}}
-#ServerAlias *
+# Allow connections using IP address or alternate hostnames (helps Windows add-printer)
+ServerAlias *
 
 # Set explicit server name for consistent network identity
 ServerName {{.hostname}}-print.local
