@@ -24,7 +24,7 @@ BrowseLocalProtocols all
 
 # Default authentication type, when authentication is required...
 DefaultAuthType Basic
-DefaultEncryption IfRequested
+DefaultEncryption Never
 
 # Windows printer installation compatibility
 DefaultUsername anonymous
