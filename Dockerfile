@@ -1,7 +1,10 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM $BUILD_FROM
 
-LABEL io.hass.version="1.4.15" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64"
+# Propagate add-on version into image labels via build arg
+ARG ADDON_VERSION="dev"
+LABEL io.hass.version="${ADDON_VERSION}" io.hass.type="addon" io.hass.arch="armhf|aarch64|i386|amd64" \
+      org.opencontainers.image.version="${ADDON_VERSION}"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
