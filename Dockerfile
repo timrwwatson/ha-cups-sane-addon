@@ -1,5 +1,6 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
-FROM $BUILD_FROM
+ARG BUILD_ARCH=amd64
+ARG BUILD_FROM=ghcr.io/home-assistant/${BUILD_ARCH}-base-debian:bookworm
+FROM ${BUILD_FROM}
 
 # Propagate add-on version into image labels via build arg
 ARG ADDON_VERSION="dev"
