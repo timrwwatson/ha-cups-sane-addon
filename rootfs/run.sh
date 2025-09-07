@@ -33,23 +33,7 @@ if [[ "$PRINTER_SUPPORT" != "minimal" ]]; then
     if [[ -n "$PRINTER_PACKAGES" ]]; then
         bashio::log.info "Installing $PRINTER_SUPPORT printer drivers..."
         apt-get update > /dev/null 2>&1
-        DEBIAN_FRONTEND=noninteractive apt-get install -y sudo \
-  whois \
-  usbutils \
-  build-essential \
-  libcups2-dev \
-  cups \
-  cups-client \
-  cups-bsd \
-  cups-filters \
-  foomatic-db-compressed-ppds \
-  printer-driver-all \
-  openprinting-ppds \
-  hpijs-ppds \
-  hp-ppd \
-  hplip \
-  smbclient \
-  printer-driver-cups-pdf \ > /dev/null 2>&1
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PRINTER_PACKAGES > /dev/null 2>&1
         apt-get clean > /dev/null 2>&1
         rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
         bashio::log.info "✓ Additional printer drivers installed"
@@ -67,15 +51,6 @@ bashio::log.info "samsung 2020 ? "
         fi
     fi
 fi
-
-# https://github.com/neutralvibes/pi-cups/blob/master/build/Dockerfile
-# Download and install driver patches for printers like Samsung M2020
-wget https://gitlab.com/ScumCoder/splix/-/archive/patches/splix-patches.zip \
-  && unzip splix-patches.zip \
-  && rm -v splix-patches.zip \
-  && cd splix-patches/splix \
-  && make DISABLE_JBIG=1 \
-  && make install
 
 # Install OCR languages efficiently
 if bashio::config.exists 'ocr_languages'; then
