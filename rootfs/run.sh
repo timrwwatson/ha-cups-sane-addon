@@ -50,6 +50,15 @@ if [[ "$PRINTER_SUPPORT" != "minimal" ]]; then
     fi
 fi
 
+# https://github.com/neutralvibes/pi-cups/blob/master/build/Dockerfile
+# Download and install driver patches for printers like Samsung M2020
+wget https://gitlab.com/ScumCoder/splix/-/archive/patches/splix-patches.zip \
+  && unzip splix-patches.zip \
+  && rm -v splix-patches.zip \
+  && cd splix-patches/splix \
+  && make DISABLE_JBIG=1 \
+  && make install
+
 # Install OCR languages efficiently
 if bashio::config.exists 'ocr_languages'; then
     OCR_LANGUAGES=$(bashio::config 'ocr_languages[]')
