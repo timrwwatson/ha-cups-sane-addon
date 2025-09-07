@@ -21,7 +21,7 @@ Turn your HA host into a network print and scan server. Share USB printers and s
 ## 🚀 **Installation**
 
 ### Quick Install
-[![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=[https%3A//github.com/vtechs-ja/ha-cups-sane-addon](https://github.com/timrwwatson/ha-cups-sane-addon))
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Ftimrwwatson%2Fha-cups-sane-addon)
 
 ### Manual Installation
 1. **Add Repository**: Settings → Add-ons → ⋮ → Repositories  
