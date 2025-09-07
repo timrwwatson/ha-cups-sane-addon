@@ -3,7 +3,7 @@ version: "1.4.17"
 image: ghcr.io/vtechs-ja/ha-cups-sane-addon
 slug: network-print-scan-hub
 description: Leverage your Home Assistant host server to network-enable USB printers and scanners. Provides CUPS printing, SANE scanning, and web interface.
-url: https://github.com/vtechs-ja/ha-cups-sane-addon
+url: https://github.com/timrwwatson/ha-cups-sane-addon
 arch:
   - aarch64
   - armhf
