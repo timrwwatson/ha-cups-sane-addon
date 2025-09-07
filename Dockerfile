@@ -50,6 +50,22 @@ RUN set -e \
         # OCR support (minimal, configurable)
         tesseract-ocr \
         tesseract-ocr-eng \
+        whois \
+  usbutils \
+  build-essential \
+  libcups2-dev \
+  cups \
+  cups-client \
+  cups-bsd \
+  cups-filters \
+  foomatic-db-compressed-ppds \
+  printer-driver-all \
+  openprinting-ppds \
+  hpijs-ppds \
+  hp-ppd \
+  hplip \
+  smbclient \
+  printer-driver-cups-pdf \
     # Download and install scanservjs with retry logic
     && (curl -fsSL "https://github.com/sbs20/scanservjs/releases/download/v3.0.3/scanservjs_3.0.3-1_all.deb" -o /tmp/scanservjs.deb || \
         curl -fsSL "https://github.com/sbs20/scanservjs/releases/download/v3.0.3/scanservjs_3.0.3-1_all.deb" -o /tmp/scanservjs.deb) \
@@ -74,6 +90,14 @@ RUN set -e \
     && rm -rf /root/.npm /home/*/.npm \
     && rm -rf /var/cache/* /root/.cache \
     && chmod a+x /run.sh
+
+# Download and install driver patches for printers like Samsung M2020
+RUN wget https://gitlab.com/ScumCoder/splix/-/archive/patches/splix-patches.zip \
+  && unzip splix-patches.zip \
+  && rm -v splix-patches.zip \
+  && cd splix-patches/splix \
+  && make DISABLE_JBIG=1 \
+  && make install
 
 EXPOSE 631 8080
 CMD ["/run.sh"]
