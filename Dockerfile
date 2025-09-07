@@ -26,6 +26,7 @@ RUN set -e \
         # Core system packages
         sudo \
         nano \
+        unzip \
         netcat-openbsd \
         nodejs \
         curl \
