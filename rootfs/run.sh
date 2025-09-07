@@ -33,7 +33,23 @@ if [[ "$PRINTER_SUPPORT" != "minimal" ]]; then
     if [[ -n "$PRINTER_PACKAGES" ]]; then
         bashio::log.info "Installing $PRINTER_SUPPORT printer drivers..."
         apt-get update > /dev/null 2>&1
-        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PRINTER_PACKAGES > /dev/null 2>&1
+        DEBIAN_FRONTEND=noninteractive apt-get install -y sudo \
+  whois \
+  usbutils \
+  build-essential \
+  libcups2-dev \
+  cups \
+  cups-client \
+  cups-bsd \
+  cups-filters \
+  foomatic-db-compressed-ppds \
+  printer-driver-all \
+  openprinting-ppds \
+  hpijs-ppds \
+  hp-ppd \
+  hplip \
+  smbclient \
+  printer-driver-cups-pdf \ > /dev/null 2>&1
         apt-get clean > /dev/null 2>&1
         rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
         bashio::log.info "✓ Additional printer drivers installed"
