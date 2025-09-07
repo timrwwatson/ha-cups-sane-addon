@@ -33,6 +33,9 @@ RUN set -e \
         # CUPS printing packages
         cups \
         cups-pdf \
+        cups-client \
+        cups-bsd \
+        cups-filters \
         colord \
         # Minimal printer drivers (configurable at runtime)
         printer-driver-hpcups \
