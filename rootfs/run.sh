@@ -53,6 +53,8 @@ if [[ "$PRINTER_SUPPORT" != "minimal" ]]; then
         apt-get clean > /dev/null 2>&1
         rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
         bashio::log.info "✓ Additional printer drivers installed"
+
+bashio::log.info "samsung 2020 ? "
         
         # HP-specific initialization
         if echo "$PRINTER_PACKAGES" | grep -q "hplip"; then
