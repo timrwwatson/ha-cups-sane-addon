@@ -31,6 +31,7 @@ RUN set -e \
         nodejs \
         curl \
         # CUPS printing packages
+        libcups2-dev \
         cups \
         cups-pdf \
         cups-client \
